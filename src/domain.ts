@@ -20,6 +20,14 @@ export function validateProgram(program: PassportProgram): void {
   for (const airport of program.airports) {
     if (!program.regions.some(r => r.id === airport.regionId)) throw new Error('Unknown region');
     coordinate(airport.location);
+    for (const runway of airport.runways ?? []) {
+      for (const dimension of [runway.lengthFeet, runway.widthFeet]) {
+        if (dimension !== undefined && (!Number.isFinite(dimension) || dimension <= 0)) throw new Error('Invalid runway dimension');
+      }
+    }
+    for (const source of airport.sources ?? []) {
+      if (!/^https?:\/\//.test(source.url) || !isCalendarDate(source.retrievedAt)) throw new Error('Invalid source reference');
+    }
     for (const stamp of airport.stampLocations ?? []) {
       if (stamp.airportId !== airport.id) throw new Error('Invalid stamp airport reference');
       if (stamp.location) coordinate(stamp.location);
@@ -43,7 +51,7 @@ export function calculateProgress(program: PassportProgram, visits: CheckIn[]) {
 export function filterAirports(program: PassportProgram, visits: CheckIn[], filters: AirportFilters) {
   const visitedIds = new Set(visits.filter(v => v.programId === program.id).map(v => v.airportId));
   return program.airports.filter(a => a.participation.participating &&
-    `${a.name} ${a.id}`.toLowerCase().includes(filters.query.trim().toLowerCase()) &&
+    `${a.name} ${a.id} ${Object.values(a.identifiers ?? {}).join(' ')}`.toLowerCase().includes(filters.query.trim().toLowerCase()) &&
     (!filters.regionId || a.regionId === filters.regionId) &&
     (filters.visited === 'all' || visitedIds.has(a.id) === (filters.visited === 'visited')));
 }

@@ -1,7 +1,7 @@
 # Aviation Passport Platform
 ## Architecture, Requirements, and Implementation Plan
 
-**Status:** First development slice implemented and locally tested; WebKit offline caveat remains (2026-09-06)
+**Status:** Full Washington airport roster integrated and locally tested; WebKit offline caveat remains (2026-09-06)
 
 **Primary repositories:** `passport-core` (called `core-passport` below), `fly-washington`
 
@@ -11,12 +11,13 @@
 
 The first runnable slice now spans both independent repositories. The long-term requirements below remain the roadmap, not a claim that every feature has been delivered.
 
-- Core: TypeScript package `@passport/core` 0.1.0, public models/API, program validation, responsive DOM application shell, Leaflet map, synchronized airport selection and filters, IndexedDB schema v1, date-only local visits, repeat visits, notes/edit/delete, configurable regional progress, and validated JSON export/add-only restore.
-- App: thin Vite composition, five explicitly labeled sample airports in two regions, multiple synthetic stamp-location examples, light/dark/system appearance, mobile map/list toggle, program-owned PWA manifest/icons, offline app-shell caching, and a gated Pages workflow.
+- Core: TypeScript package `@passport/core` 0.2.0, public models/API, program validation, responsive DOM application shell, Leaflet map, synchronized selection and alias-aware filters, IndexedDB schema v1, date-only visits, notes/edit/delete, regional progress, and validated JSON restore. Optional airport reference fields support identifiers, addresses, runways, cautions, and dated source links.
+- App: full 115-airport program-map roster in seven regions, matched uniquely to OurAirports, 153 runway records, source stamp instructions including genuine multiple locations, deterministic generation and reconciliation report, light/dark/system appearance, PWA caching, and gated Pages workflow. The original five airport IDs are preserved. Source coordinates remain distinct from precise GPS targets.
 - Maps: Leaflet + public OpenStreetMap raster tiles; no paid API key. The worker does not cache or prefetch map tiles. Offline airport/passport functions are available after the production shell is cached; detailed offline basemaps are not promised. See app development notes for provider policy.
 - Package workflow: the app consumes a checked-in versioned core tarball, so app builds do not require an adjacent checkout. `npm run core:pack` explicitly refreshes local changes. Publishing to a registry is deferred.
 - Tests: core domain/storage tests and app configuration tests pass. Desktop/mobile Chromium and mobile WebKit cover the main workflow; Chromium also passes offline reload/save. Windows WebKit offline emulation has an explicitly expected navigation failure; physical iPhone offline verification remains open. See app handoff notes for details. Remote CI has not yet run.
-- Not yet complete: verified full dataset, GPS, photos, ZIP archives, advanced filters, achievements, Oregon app, registry publication, and deployment. Physical-device testing remains a user acceptance step.
+- Coordinate review: the owner approved the program map position for Copalis and the OurAirports position for Port of Whitman. Both source disagreements remain documented as resolved in the app's reconciliation report; missing region values use their source map layers.
+- Not yet complete: dated award eligibility, precise stamp targets, GPS, photos, ZIP archives, advanced filters, achievements, Oregon app, registry publication, and deployment. Physical-device testing remains a user acceptance step. The complete captured roster is now integrated; source gaps remain explicit rather than guessed.
 
 The first slice deliberately includes basic notes and JSON transfer earlier than the broader photo/ZIP phases to make local testing useful and portable. `passport-core/README.md` and `fly-washington/docs/DEVELOPMENT.md` describe current commands, contracts, and next work. Keep these documents and this status section current as development proceeds.
 
@@ -397,7 +398,7 @@ However, it should be created early enough to validate that the core is truly pr
 
 Explore Oregon is especially useful because it challenges Washington assumptions:
 
-- five regions instead of six;
+- five regions instead of Washington's seven application regions;
 - region completion is not necessarily 100%;
 - verification differs;
 - physical stamps are not fundamental;
@@ -1473,13 +1474,15 @@ Instead, rules should evaluate program configuration.
 The Fly Washington dataset/configuration must support the current conceptual program structure:
 
 - participating airports and seaplane bases;
-- six regions;
+- seven application regions: six geographic regions plus Seaplane Bases as its own region (owner decision, 2026-09-06);
 - airport-specific stamp locations;
 - multiple stamp locations where applicable;
 - regional completion;
 - whole-program progress;
 - award thresholds;
 - repeat completion.
+
+Owner clarification (2026-09-06): Seaplane Bases is a regular region. Its airports count under the same rules as all other airports toward regional completion, Gold, Platinum, and repeat completion, including overall award denominators. Only its patch differs, expressed through program-owned award presentation. Do not introduce a separate seaplane progress or eligibility algorithm.
 
 Program configuration must be able to represent:
 
@@ -1500,6 +1503,8 @@ When official rules change, the program configuration/data should be versionable
 ---
 
 # 43. Program Rule Evolution
+
+**Source review (2026-09-06):** Official Washington rules require retained withdrawn-airport credit, delayed new-airport requirements, and preserved region validations. See `fly-washington/docs/AWARDS.md` for sources and open questions. Current-participation-only progress is insufficient for award eligibility. Design generic dated eligibility and completion records before claiming official award calculations.
 
 Passport programs change over time.
 

@@ -61,6 +61,7 @@ export class PassportApp {
       this.announce('Basemap tiles are unavailable. Airport markers, the list, and your passport still work.');
     }).addTo(this.map);
     this.markers.addTo(this.map);
+    this.map.on('zoomend', () => this.render());
     this.resize = new ResizeObserver(() => this.map.invalidateSize());
     this.resize.observe(this.el('#map'));
     this.el<HTMLInputElement>('#search').addEventListener('input', event => { this.filters.query = (event.target as HTMLInputElement).value; this.render(); });
@@ -105,6 +106,8 @@ export class PassportApp {
 
   private render() {
     const L = this.leaflet;
+    const compact = this.map.getZoom() < (this.program.map.markerDetailZoom ?? 0);
+    this.el('#map').classList.toggle('compact-markers', compact);
     const p = this.program;
     const airports = filterAirports(p, this.visits, this.filters);
     const visited = new Set(this.visits.map(v => v.airportId));
@@ -121,7 +124,7 @@ export class PassportApp {
       const marker = L.marker([airport.location.latitude, airport.location.longitude], { icon, title: `${airport.id} ${airport.name}${visited.has(airport.id) ? ', visited' : ', not visited'}`, alt: airport.name }).addTo(this.markers).on('click', () => this.select(airport));
       marker.getElement()?.setAttribute('aria-label', `${airport.id} ${airport.name}, ${visited.has(airport.id) ? 'visited' : 'not visited'}`);
       const label = document.createElement('span'); label.textContent = airport.id;
-      marker.bindTooltip(label, { permanent: true, direction: 'bottom', offset: [0, 16], className: 'airport-tooltip' });
+      marker.bindTooltip(label, { permanent: !compact || this.selected?.id === airport.id, direction: 'bottom', offset: [0, 16], className: 'airport-tooltip' });
     }
     const progress = calculateProgress(p, this.visits);
     this.el('#overall').innerHTML = `<div><strong>${progress.visited}<span> / ${progress.total}</span></strong><span>airports visited</span></div><progress aria-label="Overall progress" value="${progress.visited}" max="${progress.total || 1}"></progress>`;
@@ -156,6 +159,10 @@ export class PassportApp {
     this.el('.browse').hidden = true;
     const visits = this.visits.filter(v => v.airportId === airport.id);
     detail.innerHTML = `<button id="close-detail" type="button" class="back-button">← All airports</button><span class="eyebrow">${escape(region.name)} · ${escape(airport.id)}</span><h2>${escape(airport.name)}</h2><p>${escape(airport.description)}</p>
+    ${airport.address ? `<p class="airport-address">${escape(airport.address)}</p>` : ''}
+    ${airport.cautions?.map(c => `<p class="airport-caution">${escape(c)}</p>`).join('') ?? ''}
+    ${airport.runways?.length ? `<h3>Runways</h3>${airport.runways.map(r => `<p>${escape(r.name)} · ${r.lengthFeet ? `${r.lengthFeet.toLocaleString()} ft` : 'Length unknown'} · ${escape(r.surface ?? 'Surface unknown')}${r.closed ? ' · Closed in source' : ''}</p>`).join('')}` : ''}
+    ${airport.sources?.length ? `<p class="airport-sources">Sources: ${airport.sources.map(s => `<a href="${escape(s.url)}" target="_blank" rel="noopener noreferrer">${escape(s.name)}</a> (${escape(s.retrievedAt)})`).join(' · ')}</p>` : ''}
     <h3>Stamp locations</h3>${airport.stampLocations?.length ? airport.stampLocations.map(s => `<article class="stamp"><strong>${escape(s.name)}</strong><p>${escape(s.description)}</p><small>Access: ${escape(s.access.replace('-', ' '))}</small></article>`).join('') : '<p>Stamp details have not been added.</p>'}
     <form id="checkin"><h3>${edit ? 'Edit visit' : 'Add a visit'}</h3><label>Visit date<input name="date" type="date" required max="${localDate()}" value="${edit?.visitedAt ?? localDate()}"></label><label>Notes <span class="muted">(optional)</span><textarea name="notes" rows="3" maxlength="10000" placeholder="A good landing, a great lunch…">${escape(edit?.notes ?? '')}</textarea></label><p class="muted">Saved locally as an unverified visit. Time is not recorded.</p><button class="primary" type="submit">${edit ? 'Save changes' : 'Save check-in'}</button><p id="save-status" role="status"></p></form>
     <h3>Visit history <span class="muted">${visits.length}</span></h3><div class="history">${visits.length ? visits.map(v => `<article><strong>${escape(v.visitedAt)}</strong><small>Unverified</small><p>${escape(v.notes || 'No notes for this visit.')}</p><div><button type="button" data-edit="${escape(v.id)}">Edit</button><button type="button" data-delete="${escape(v.id)}">Delete</button></div></article>`).join('') : '<p class="muted">Your first visit is still ahead of you.</p>'}</div>`;

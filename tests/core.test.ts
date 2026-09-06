@@ -29,6 +29,19 @@ describe('program-independent progress and filtering', () => {
   it('combines search, region, and visit filters', () => {
     expect(filterAirports(program, [visit('A0')], { query: ' AIRPORT ', regionId: 'a', visited: 'unvisited' }).map(a => a.id)).toEqual(['A1']);
   });
+  it('searches airport aliases and validates optional reference data', () => {
+    const enriched=structuredClone(program);
+    enriched.airports[0].identifiers={faa:'XYZ',icao:'KXYZ'};
+    enriched.airports[0].runways=[{id:'r',name:'01 / 19',lengthFeet:2500}];
+    enriched.airports[0].sources=[{name:'Source',url:'https://example.com/data',retrievedAt:'2026-09-06'}];
+    expect(filterAirports(enriched,[],{query:'xyz',regionId:'',visited:'all'}).map(a=>a.id)).toEqual(['A0']);
+    expect(()=>validateProgram(enriched)).not.toThrow();
+    enriched.airports[0].runways[0].lengthFeet=-1;
+    expect(()=>validateProgram(enriched)).toThrow('Invalid runway dimension');
+    enriched.airports[0].runways[0].lengthFeet=2500;
+    enriched.airports[0].sources[0].url='javascript:alert(1)';
+    expect(()=>validateProgram(enriched)).toThrow('Invalid source reference');
+  });
   it('rejects malformed program relationships, coordinates, and thresholds', () => {
     expect(() => validateProgram(program)).not.toThrow();
     for (const mutate of [

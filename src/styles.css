@@ -62,6 +62,8 @@ progress::-moz-progress-bar { background: var(--region, #438262); }
 .passport-marker { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: #fff; border: 3px solid var(--region); box-shadow: 0 2px 8px #17372d50; color: #203b38; font-size: 21px; }
 .passport-marker.is-visited { background: var(--region); color: #fff; }
 .passport-marker.is-selected { outline: 3px solid #c78424; outline-offset: 4px; }
+.compact-markers .passport-marker:not(.is-selected) { width: 16px; height: 16px; margin: 12px; border-width: 3px; font-size: 0; }
+.compact-markers .passport-marker.is-visited:not(.is-selected) { width: 20px; height: 20px; margin: 10px; font-size: 13px; }
 .airport-tooltip { background: var(--surface); color: var(--text); border: 0; font-size: 10px; font-weight: 700; padding: 2px 6px; box-shadow: 0 1px 5px #0002; }
 .airport-tooltip::before { display: none; }
 [data-theme='dark'] .leaflet-tile-pane { filter: brightness(.65) saturate(.75); }
@@ -83,6 +85,10 @@ footer { margin: 0 4% 24px; color: var(--muted); font-size: 12px; }
 .detail h2 { font-size: 25px; margin: 10px 0; }
 .detail h3 { margin: 22px 0 12px; }
 .detail p { font-size: 13px; }
+.airport-address, .airport-caution, .airport-sources { margin-top: 12px; }
+.airport-caution { padding: 10px; border-left: 3px solid #c78424; background: var(--soft); }
+.airport-sources a { color: var(--text); text-decoration: underline; }
+.stamp p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .back-button { margin-bottom: 22px; }
 .stamp { padding: 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; font-size: 13px; }
 .stamp p { margin: 6px 0; }

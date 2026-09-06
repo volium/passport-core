@@ -8,6 +8,11 @@ export interface StampLocationDefinition {
 }
 export interface AirportDefinition {
   id: string; name: string; regionId: string; location: Coordinates;
+  identifiers?: { faa?: string; icao?: string; local?: string };
+  address?: string;
+  runways?: { id: string; name: string; lengthFeet?: number; widthFeet?: number; surface?: string; lighted?: boolean; closed?: boolean }[];
+  cautions?: string[];
+  sources?: { name: string; url: string; retrievedAt: string }[];
   participation: { participating: boolean };
   description: string;
   stampLocations?: StampLocationDefinition[];
@@ -16,7 +21,7 @@ export interface PassportProgram {
   id: string; name: string; shortName: string; description: string;
   dataNotice: string;
   branding: { accent: string; eyebrow: string };
-  map: { center: Coordinates; zoom: number; tileUrl: string; attribution: string };
+  map: { center: Coordinates; zoom: number; tileUrl: string; attribution: string; markerDetailZoom?: number };
   regions: RegionDefinition[]; airports: AirportDefinition[];
 }
 export interface CheckIn {

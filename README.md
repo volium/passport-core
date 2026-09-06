@@ -20,7 +20,7 @@ The implementation uses TypeScript, browser DOM components, Leaflet, and the `id
 
 ## Current milestone
 
-Implemented: typed configuration, validation, responsive map/list/details, light/dark/system appearance, region/search/visit filters, date-only check-ins, repeat visits, notes, edit/delete, IndexedDB, unique-airport progress, and JSON backup/restore. Tests exercise alternate region rules and storage isolation. The app repository owns its PWA shell, manifest, sample data, and browser tests.
+Implemented: typed configuration, validation, responsive map/list/details, light/dark/system appearance, region/search/visit filters, date-only check-ins, repeat visits, notes, edit/delete, IndexedDB, unique-airport progress, and JSON backup/restore. Core 0.2.0 adds optional identifier aliases, addresses, runway reference data, cautions, and dated source links to `AirportDefinition`; search includes aliases and details render the reference information. Existing program configurations remain compatible, and no visit/backup migration is required. The app repository owns its PWA shell, manifest, full source-derived airport dataset, and browser tests.
 
 Storage database: `aviation-passport:<programId>`, schema version 1, `checkIns` object store keyed by visit ID. Dates are ISO calendar dates with `timeKnown: false`; creation/update instants are ISO timestamps. Repeat visits remain separate records. Progress counts participating airports once, excluding unrelated programs. Empty regions are never complete. Count and percentage rules do not assume 100% completion.
 
@@ -28,7 +28,9 @@ Backup format: `{ format: 'aviation-passport', schemaVersion: 1, programId, expo
 
 ## Cross-repository workflow
 
-The sibling app consumes an explicit `vendor/passport-core-0.1.0.tgz` archive. This is a bootstrap release artifact, checked into the app repository so CI does not need this checkout or an unpublished registry package.
+Programs may set `map.markerDetailZoom` to use compact markers and hover labels below a zoom level. Washington uses 9 to keep the statewide roster legible; selected airports retain detailed markers and labels.
+
+The sibling app consumes an explicit `vendor/passport-core-0.2.0.tgz` archive, checked into the app repository so CI does not need this checkout or an unpublished registry package.
 
 After changing this core, run its checks, then from `../fly-washington` run:
 
@@ -40,8 +42,8 @@ npm test
 npm run test:e2e
 ```
 
-Commit the app archive and lockfile together with consuming changes. During this unreleased initial milestone, the archive may be refreshed at 0.1.0. After the first release, increment versions instead of replacing released artifacts. Publishing and switching to a registry dependency remain deliberate later steps.
+Commit the app archive and lockfile together with consuming changes. Increment versions for distinct milestones rather than replacing earlier committed artifacts; refresh only the current unpublished version while developing it. Publishing and switching to a registry dependency remain deliberate later steps.
 
 ## Handoff
 
-See [Planning.md](Planning.md), especially the implementation status near the top, and the app's `docs/DEVELOPMENT.md`. Remaining work includes verified program data, richer configurable filters, GPS evidence, photos, achievements, and Oregon validation. Do not treat this first slice as the completed product. Update the implementation status and relevant contract documentation in every feature change.
+See [Planning.md](Planning.md), especially the implementation status near the top, and the app's `docs/DEVELOPMENT.md`. The full captured Washington roster is integrated; remaining work includes dated award eligibility, precise stamp targets, richer configurable filters, GPS evidence, photos, achievements, and Oregon validation. Update the implementation status and relevant contract documentation in every feature change.
