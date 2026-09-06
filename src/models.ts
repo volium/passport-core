@@ -17,11 +17,16 @@ export interface AirportDefinition {
   description: string;
   stampLocations?: StampLocationDefinition[];
 }
+export interface MapStyleDefinition {
+  id: string; name: string; tileUrl: string; attribution: string;
+  /** Optional native dark tiles, selected by the application's appearance setting. */
+  darkTileUrl?: string;
+}
 export interface PassportProgram {
   id: string; name: string; shortName: string; description: string;
   dataNotice: string;
   branding: { accent: string; eyebrow: string };
-  map: { center: Coordinates; zoom: number; tileUrl: string; attribution: string; markerDetailZoom?: number };
+  map: { center: Coordinates; zoom: number; tileUrl: string; attribution: string; markerDetailZoom?: number; styles?: MapStyleDefinition[] };
   regions: RegionDefinition[]; airports: AirportDefinition[];
 }
 export interface CheckIn {

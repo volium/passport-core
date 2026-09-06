@@ -32,7 +32,11 @@ Programs may set `map.markerDetailZoom` to use compact markers and hover labels 
 
 Clicking empty map space clears airport selection and closes details without changing the map position or zoom. Markers retain their region and visited styling. Dragging or zooming preserves selection, and clicking another marker selects that airport directly. On mobile, the full-screen details retain the All airports button and Escape dismissal.
 
-The sibling app consumes an explicit `vendor/passport-core-0.2.0.tgz` archive, checked into the app repository so CI does not need this checkout or an unpublished registry package.
+Core 0.3.0 adds optional `map.styles: MapStyleDefinition[]`. Each style has a stable `id`, display `name`, `tileUrl`, and provider `attribution`; `darkTileUrl` optionally supplies native dark tiles. The first style is the default. A selector appears when more than one style is configured, and remembers the choice in localStorage under `passport:<programId>:map-style`. Missing/unavailable preferences fall back to the first style. Configurations without `styles` keep using the existing `map.tileUrl` and `map.attribution` fields.
+
+Style changes replace only the tile layer and attribution, preserving map position, zoom, selection, and in-progress forms. Native dark tiles follow light/dark/system appearance without additional CSS dimming. Provider URLs and browser-safe credentials belong in the consuming program. Preferences are optional and are not part of passport backups; storage schema and backup format remain version 1.
+
+The sibling app consumes an explicit `vendor/passport-core-0.3.0.tgz` archive, checked into the app repository so CI does not need this checkout or an unpublished registry package.
 
 After changing this core, run its checks, then from `../fly-washington` run:
 

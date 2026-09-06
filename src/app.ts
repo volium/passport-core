@@ -1,7 +1,7 @@
 import type * as Leaflet from 'leaflet';
 import { calculateProgress, filterAirports, isCalendarDate, validateBackup, validateProgram } from './domain.js';
 import { PassportStore } from './persistence.js';
-import type { AirportDefinition, AirportFilters, CheckIn, PassportBackup, PassportProgram } from './models.js';
+import type { AirportDefinition, AirportFilters, CheckIn, MapStyleDefinition, PassportBackup, PassportProgram } from './models.js';
 
 const escape = (text: string): string => text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const localDate = (): string => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; };
@@ -13,6 +13,9 @@ export class PassportApp {
   private map!: Leaflet.Map;
   private leaflet!: typeof Leaflet.default;
   private markers!: Leaflet.LayerGroup;
+  private tileLayer?: Leaflet.TileLayer;
+  private mapStyle?: MapStyleDefinition;
+  private tileUrl?: string;
   private store: PassportStore;
   private visits: CheckIn[] = [];
   private selected?: AirportDefinition;
@@ -48,7 +51,7 @@ export class PassportApp {
       <div class="filter-row"><label>Region<select id="region"><option value="">All regions</option>${p.regions.map(r => `<option value="${escape(r.id)}">${escape(r.name)}</option>`).join('')}</select></label><label>Passport<select id="visited"><option value="all">All airports</option><option value="unvisited">Not visited</option><option value="visited">Visited</option></select></label></div>
       <div class="mobile-toggle" aria-label="Airport view"><button type="button" data-view="map" aria-pressed="true">Map</button><button type="button" data-view="list" aria-pressed="false">List</button></div>
       <div id="airport-list" tabindex="-1" class="airport-list"></div></div><section id="detail" class="detail" hidden aria-label="Airport details"></section>
-      </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><div class="map-caption"><span>○ Not visited &nbsp; ✓ Visited</span><button id="fit" type="button">Show all matches</button></div></section></div>
+      </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><div id="map-style-control" class="map-style-control" hidden><label>Map style<select id="map-style"></select></label></div><div class="map-caption"><span>○ Not visited &nbsp; ✓ Visited</span><button id="fit" type="button">Show all matches</button></div></section></div>
       <section class="passport-section"><div class="section-heading"><div><span class="eyebrow">ONE AIRPORT AT A TIME</span><h2>Your regional passport</h2></div><span class="local-label">Saved on this device</span></div><div id="regions" class="region-cards"></div></section>
       <footer><p>${escape(p.dataNotice)}</p><div class="backup-actions"><button id="export" type="button">Export passport</button><label class="button">Import passport<input id="import" type="file" accept="application/json,.json" class="sr-only"></label></div><p id="notice" role="status" aria-live="polite"></p></footer>`;
     this.setupTheme();
@@ -57,9 +60,7 @@ export class PassportApp {
     for (const event of ['online', 'offline']) window.addEventListener(event, connection, { signal: this.events.signal });
     this.map = L.map(this.el('#map'), { zoomControl: false }).setView([p.map.center.latitude, p.map.center.longitude], p.map.zoom);
     L.control.zoom({ position: 'topright' }).addTo(this.map);
-    L.tileLayer(p.map.tileUrl, { attribution: p.map.attribution, maxZoom: 19 }).on('tileerror', () => {
-      this.announce('Basemap tiles are unavailable. Airport markers, the list, and your passport still work.');
-    }).addTo(this.map);
+    this.setupMapStyles();
     this.markers.addTo(this.map);
     this.map.on('click', () => {
       if (this.selected) this.closeDetail(false);
@@ -101,10 +102,43 @@ export class PassportApp {
     try { select.value = localStorage.getItem('passport:theme') || 'system'; } catch { /* Preference storage is optional. */ }
     if (!select.value) select.value = 'system';
     const media = matchMedia('(prefers-color-scheme: dark)');
-    const apply = () => { document.documentElement.dataset.theme = select.value === 'system' ? (media.matches ? 'dark' : 'light') : select.value; };
+    const apply = () => { document.documentElement.dataset.theme = select.value === 'system' ? (media.matches ? 'dark' : 'light') : select.value; this.updateBasemap(); };
     apply();
     media.addEventListener('change', apply, { signal: this.events.signal });
     select.addEventListener('change', () => { apply(); try { localStorage.setItem('passport:theme', select.value); } catch { /* Still usable this session. */ } });
+  }
+
+  private setupMapStyles() {
+    const config = this.program.map;
+    const styles = config.styles ?? [{ id: 'default', name: 'Standard', tileUrl: config.tileUrl, attribution: config.attribution }];
+    const select = this.el<HTMLSelectElement>('#map-style');
+    select.innerHTML = styles.map(style => `<option value="${escape(style.id)}">${escape(style.name)}</option>`).join('');
+    const preference = `passport:${this.program.id}:map-style`;
+    let saved: string | null = null;
+    try { saved = localStorage.getItem(preference); } catch { /* Preference storage is optional. */ }
+    this.mapStyle = styles.find(style => style.id === saved) ?? styles[0];
+    select.value = this.mapStyle.id;
+    this.el('#map-style-control').hidden = styles.length < 2;
+    select.addEventListener('change', () => {
+      this.mapStyle = styles.find(style => style.id === select.value)!;
+      try { localStorage.setItem(preference, this.mapStyle.id); } catch { /* Still usable this session. */ }
+      this.updateBasemap();
+    });
+    this.updateBasemap();
+  }
+
+  private updateBasemap() {
+    if (!this.mapStyle || !this.map) return;
+    const style = this.mapStyle;
+    const dark = document.documentElement.dataset.theme === 'dark' && !!style.darkTileUrl;
+    this.el('#map').classList.toggle('dim-basemap', !dark);
+    const url = dark ? style.darkTileUrl! : style.tileUrl;
+    if (url === this.tileUrl && this.tileLayer?.options.attribution === style.attribution) return;
+    this.tileLayer?.remove();
+    this.tileUrl = url;
+    this.tileLayer = this.leaflet.tileLayer(url, { attribution: style.attribution, maxZoom: 19 }).on('tileerror', () => {
+      this.announce('Basemap tiles are unavailable. Try another map style or check your connection. Airport markers, the list, and your passport still work.');
+    }).addTo(this.map);
   }
 
   private render() {

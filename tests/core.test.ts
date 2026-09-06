@@ -18,6 +18,21 @@ const program: PassportProgram = {
 const visit = (airportId: string, id = airportId): CheckIn => ({ id, programId: program.id, airportId, visitedAt: '2026-08-10', timeKnown: false, createdAt: '2026-08-11T12:00:00Z', updatedAt: '2026-08-11T12:00:00Z', notes: '', verification: { status: 'unverified' } });
 
 describe('program-independent progress and filtering', () => {
+  it('validates selectable map styles while keeping legacy map configurations compatible', () => {
+    expect(() => validateProgram(program)).not.toThrow();
+    const configured = structuredClone(program);
+    configured.map.styles = [{ id: 'streets', name: 'Streets', tileUrl: 'https://example.com/{z}/{x}/{y}.png', darkTileUrl: 'https://example.com/dark/{z}/{x}/{y}.png', attribution: 'Example' }];
+    expect(() => validateProgram(configured)).not.toThrow();
+    for (const mutate of [
+      (p: PassportProgram) => { p.map.styles = []; },
+      (p: PassportProgram) => { p.map.styles!.push({ ...p.map.styles![0] }); },
+      (p: PassportProgram) => { p.map.styles![0].id = ' '; },
+      (p: PassportProgram) => { p.map.styles![0].name = ''; },
+      (p: PassportProgram) => { p.map.styles![0].attribution = ''; },
+      (p: PassportProgram) => { p.map.styles![0].tileUrl = 'javascript:alert(1)'; },
+      (p: PassportProgram) => { p.map.styles![0].darkTileUrl = 'https://example.com/missing-coordinates'; },
+    ]) { const invalid = structuredClone(configured); mutate(invalid); expect(() => validateProgram(invalid)).toThrow(); }
+  });
   it('counts unique participating airports, isolates programs, and supports three completion rules', () => {
     const result = calculateProgress(program, [visit('A0'), visit('A0', 'repeat'), visit('A2'), visit('A4'), visit('unknown'), { ...visit('A1'), programId: 'other' }]);
     expect(result.visited).toBe(3);
