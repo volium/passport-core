@@ -30,6 +30,8 @@ Backup format: `{ format: 'aviation-passport', schemaVersion: 1, programId, expo
 
 Programs may set `map.markerDetailZoom` to use compact markers and hover labels below a zoom level. Washington uses 9 to keep the statewide roster legible; selected airports retain detailed markers and labels.
 
+Clicking empty map space clears airport selection and closes details without changing the map position or zoom. Markers retain their region and visited styling. Dragging or zooming preserves selection, and clicking another marker selects that airport directly. On mobile, the full-screen details retain the All airports button and Escape dismissal.
+
 The sibling app consumes an explicit `vendor/passport-core-0.2.0.tgz` archive, checked into the app repository so CI does not need this checkout or an unpublished registry package.
 
 After changing this core, run its checks, then from `../fly-washington` run:

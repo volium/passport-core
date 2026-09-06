@@ -9,6 +9,8 @@
 
 ## Implementation status — 2026-09-06
 
+UX update: clicking empty map space clears airport selection and closes details while preserving map position, zoom, region styling, and visited status. Dragging and zooming preserve selection; another marker click switches airports. This behavior belongs to the shared core; the app consumes the refreshed package and owns browser regression coverage.
+
 The first runnable slice now spans both independent repositories. The long-term requirements below remain the roadmap, not a claim that every feature has been delivered.
 
 - Core: TypeScript package `@passport/core` 0.2.0, public models/API, program validation, responsive DOM application shell, Leaflet map, synchronized selection and alias-aware filters, IndexedDB schema v1, date-only visits, notes/edit/delete, regional progress, and validated JSON restore. Optional airport reference fields support identifiers, addresses, runways, cautions, and dated source links.

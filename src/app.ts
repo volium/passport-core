@@ -61,6 +61,9 @@ export class PassportApp {
       this.announce('Basemap tiles are unavailable. Airport markers, the list, and your passport still work.');
     }).addTo(this.map);
     this.markers.addTo(this.map);
+    this.map.on('click', () => {
+      if (this.selected) this.closeDetail(false);
+    });
     this.map.on('zoomend', () => this.render());
     this.resize = new ResizeObserver(() => this.map.invalidateSize());
     this.resize.observe(this.el('#map'));
@@ -140,12 +143,13 @@ export class PassportApp {
     this.el<HTMLButtonElement>('#close-detail').focus();
   }
 
-  private closeDetail() {
+  private closeDetail(restoreFocus = true) {
     this.selected = undefined;
     this.el('#detail').hidden = true;
     this.el('.browse').hidden = false;
     this.render();
-    if (this.lastFocus?.isConnected) this.lastFocus.focus(); else this.el('#search').focus();
+    if (!restoreFocus) this.el('#map').focus({ preventScroll: true });
+    else if (this.lastFocus?.isConnected) this.lastFocus.focus(); else this.el('#search').focus();
   }
 
   private renderDetail(edit?: CheckIn) {
