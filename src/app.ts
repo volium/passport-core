@@ -23,18 +23,23 @@ export class PassportApp {
   private events = new AbortController();
   private resize?: ResizeObserver;
   private lastFocus?: HTMLElement;
+  private passportOpen = false;
   constructor(private options: { program: PassportProgram }) {
     validateProgram(options.program);
     this.store = new PassportStore(options.program.id);
   }
   private get program() { return this.options.program; }
   private el<T extends HTMLElement = HTMLElement>(selector: string): T { return this.root.querySelector<T>(selector)!; }
-  private announce(message: string) { this.el('#notice').textContent = message; }
+  private announce(message: string) {
+    this.el('#notice').textContent = message;
+    this.el('#passport-notice').textContent = this.passportOpen ? message : '';
+  }
 
   async mount(target: string): Promise<void> {
     const root = document.querySelector<HTMLElement>(target);
     if (!root) throw new Error(`Mount target not found: ${target}`);
     this.root = root;
+    this.root.classList.add('passport-app');
     const L = (await import('leaflet')).default;
     this.leaflet = L;
     this.markers = L.layerGroup();
@@ -43,17 +48,18 @@ export class PassportApp {
     this.root.innerHTML = `
       <a class="skip-link" href="#airport-list">Skip to airports</a>
       <header class="app-header"><div class="brand"><span class="brand-icon" aria-hidden="true">✈</span><div><span class="eyebrow">${escape(p.branding.eyebrow)}</span><h1>${escape(p.shortName)}</h1></div></div>
-      <div class="header-actions"><span id="connection" class="connection"></span><label class="theme-label">Appearance<select id="theme" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div></header>
-      <section class="journey"><div><span class="eyebrow">YOUR NEXT ADVENTURE STARTS HERE</span><h2>A little runway. A new discovery.</h2><p>${escape(p.description)}</p></div><div id="overall" class="overall"></div></section>
-      <div class="workspace" data-view="map"><aside class="sidebar" aria-label="Airport explorer">
+      <div id="overall" class="overall"></div><div class="header-actions"><span id="connection" class="connection"></span><label class="theme-label">Appearance<select id="theme" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div></header>
+      <div class="workspace" data-view="map" data-section="explore"><aside class="sidebar" aria-label="Passport navigation and airport explorer">
+      <div class="primary-tabs" role="tablist" aria-label="Main view"><button id="explore-tab" role="tab" type="button" aria-selected="true" aria-controls="explore-panel">Explore</button><button id="passport-tab" role="tab" type="button" aria-selected="false" aria-controls="passport-panel" tabindex="-1">My passport</button></div>
+      <section id="explore-panel" class="explore-panel" role="tabpanel" aria-labelledby="explore-tab">
       <div class="browse"><div class="section-heading"><h2>Explore airports</h2><span id="match-count" class="count"></span></div>
       <label class="search-label"><span class="sr-only">Search airports</span><input id="search" type="search" placeholder="Search airport name or identifier"></label>
       <div class="filter-row"><label>Region<select id="region"><option value="">All regions</option>${p.regions.map(r => `<option value="${escape(r.id)}">${escape(r.name)}</option>`).join('')}</select></label><label>Passport<select id="visited"><option value="all">All airports</option><option value="unvisited">Not visited</option><option value="visited">Visited</option></select></label></div>
       <div class="mobile-toggle" aria-label="Airport view"><button type="button" data-view="map" aria-pressed="true">Map</button><button type="button" data-view="list" aria-pressed="false">List</button></div>
-      <div id="airport-list" tabindex="-1" class="airport-list"></div></div><section id="detail" class="detail" hidden aria-label="Airport details"></section>
+      <div id="airport-list" tabindex="-1" class="airport-list"></div></div><section id="detail" class="detail" hidden aria-label="Airport details"></section></section>
+      <section id="passport-panel" class="passport-panel" role="tabpanel" hidden aria-labelledby="passport-tab"><div class="passport-content"><p>${escape(p.description)}</p><p class="local-label">Saved on this device</p><div class="backup-actions"><button id="export" type="button">Export passport</button><label class="button">Import passport<input id="import" type="file" accept="application/json,.json" class="sr-only"></label></div><p id="passport-notice" role="status" aria-live="polite"></p><section class="passport-section"><h3>Your regional passport</h3><div id="regions" class="region-cards"></div></section><p class="data-notice">${escape(p.dataNotice)}</p></div></section>
       </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><div id="map-style-control" class="map-style-control" hidden><label>Map style<select id="map-style"></select></label></div><div class="map-caption"><span>○ Not visited &nbsp; ✓ Visited</span><button id="fit" type="button">Show all matches</button></div></section></div>
-      <section class="passport-section"><div class="section-heading"><div><span class="eyebrow">ONE AIRPORT AT A TIME</span><h2>Your regional passport</h2></div><span class="local-label">Saved on this device</span></div><div id="regions" class="region-cards"></div></section>
-      <footer><p>${escape(p.dataNotice)}</p><div class="backup-actions"><button id="export" type="button">Export passport</button><label class="button">Import passport<input id="import" type="file" accept="application/json,.json" class="sr-only"></label></div><p id="notice" role="status" aria-live="polite"></p></footer>`;
+      <p id="notice" role="status" aria-live="polite"></p>`;
     this.setupTheme();
     const connection = () => { this.el('#connection').textContent = navigator.onLine ? '● Local passport' : '○ Offline · airports & visits available'; };
     connection();
@@ -66,7 +72,9 @@ export class PassportApp {
       if (this.selected) this.closeDetail(false);
     });
     this.map.on('zoomend', () => this.render());
-    this.resize = new ResizeObserver(() => this.map.invalidateSize());
+    this.resize = new ResizeObserver(() => {
+      if (this.el('#map').clientWidth && this.el('#map').clientHeight) this.map.invalidateSize();
+    });
     this.resize.observe(this.el('#map'));
     this.el<HTMLInputElement>('#search').addEventListener('input', event => { this.filters.query = (event.target as HTMLInputElement).value; this.render(); });
     this.el('#region').addEventListener('change', event => { this.filters.regionId = (event.target as HTMLSelectElement).value; this.render(); });
@@ -82,11 +90,25 @@ export class PassportApp {
     });
     this.el('#export').addEventListener('click', () => void this.export());
     this.el('#import').addEventListener('change', event => void this.import(event.target as HTMLInputElement));
+    const tabs = [this.el('#explore-tab'), this.el('#passport-tab')];
+    tabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => this.setPassportOpen(index === 1));
+      tab.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        this.setPassportOpen(event.key === 'Home' ? false : event.key === 'End' ? true : index === 0);
+      });
+    });
+    const mobile = matchMedia('(max-width: 760px)');
+    mobile.addEventListener('change', () => this.syncPanels(), { signal: this.events.signal });
     this.root.addEventListener('keydown', event => {
-      if (!this.selected) return;
-      if (event.key === 'Escape') this.closeDetail();
-      if (event.key === 'Tab' && matchMedia('(max-width: 760px)').matches) {
-        const focusable = [...this.el('#detail').querySelectorAll<HTMLElement>('button, input, textarea')].filter(e => !e.hasAttribute('disabled'));
+      if (event.key === 'Escape') {
+        if (!this.passportOpen && this.selected) { event.preventDefault(); this.closeDetail(); }
+        return;
+      }
+      const panel = !this.passportOpen && this.selected ? this.el('#detail') : undefined;
+      if (event.key === 'Tab' && mobile.matches && panel) {
+        const focusable = [...panel.querySelectorAll<HTMLElement>('button, input, textarea, select, a[href], [tabindex="0"]')].filter(e => !e.hasAttribute('disabled') && e.getClientRects().length > 0);
         const first = focusable[0], last = focusable.at(-1);
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
         if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -95,6 +117,32 @@ export class PassportApp {
     try { this.visits = await this.store.list(); }
     catch { this.announce('Device storage could not be opened. Check browser storage permissions before saving visits.'); }
     this.render();
+  }
+
+  private setPassportOpen(open: boolean, focusTab = true) {
+    this.passportOpen = open;
+    this.el('.workspace').dataset.section = open ? 'passport' : 'explore';
+    this.el('#explore-panel').hidden = open;
+    this.el('#passport-panel').hidden = !open;
+    this.el('#notice').hidden = open;
+    for (const [selector, active] of [['#explore-tab', !open], ['#passport-tab', open]] as const) {
+      this.el(selector).setAttribute('aria-selected', String(active));
+      this.el(selector).tabIndex = active ? 0 : -1;
+    }
+    this.syncPanels();
+    if (this.el('#map').clientWidth && this.el('#map').clientHeight) this.map.invalidateSize();
+    if (focusTab) this.el(!open && this.selected && matchMedia('(max-width: 760px)').matches ? '#close-detail' : open ? '#passport-tab' : '#explore-tab').focus({ preventScroll: true });
+  }
+
+  private syncPanels() {
+    const mobile = matchMedia('(max-width: 760px)').matches;
+    const modal = mobile && !this.passportOpen && !!this.selected;
+    for (const selector of ['.app-header', '.map-section', '#notice', '.skip-link', '.primary-tabs']) this.el(selector).inert = modal;
+    this.el('.browse').inert = this.passportOpen || (mobile && !!this.selected);
+    this.el('#detail').inert = this.passportOpen;
+    const detail = this.el('#detail');
+    if (modal) { detail.setAttribute('role', 'dialog'); detail.setAttribute('aria-modal', 'true'); }
+    else { detail.removeAttribute('role'); detail.removeAttribute('aria-modal'); }
   }
 
   private setupTheme() {
@@ -169,6 +217,7 @@ export class PassportApp {
   }
 
   private select(airport: AirportDefinition) {
+    if (this.passportOpen) this.setPassportOpen(false, false);
     if (!this.selected) this.lastFocus = document.activeElement as HTMLElement;
     this.selected = airport;
     this.map.panTo([airport.location.latitude, airport.location.longitude]);
@@ -182,6 +231,7 @@ export class PassportApp {
     this.el('#detail').hidden = true;
     this.el('.browse').hidden = false;
     this.render();
+    this.syncPanels();
     if (!restoreFocus) this.el('#map').focus({ preventScroll: true });
     else if (this.lastFocus?.isConnected) this.lastFocus.focus(); else this.el('#search').focus();
   }
@@ -191,9 +241,7 @@ export class PassportApp {
     const region = this.program.regions.find(r => r.id === airport.regionId)!;
     const detail = this.el('#detail');
     detail.hidden = false;
-    if (matchMedia('(max-width: 760px)').matches) {
-      detail.setAttribute('role', 'dialog'); detail.setAttribute('aria-modal', 'true');
-    } else { detail.removeAttribute('role'); detail.removeAttribute('aria-modal'); }
+    this.syncPanels();
     this.el('.browse').hidden = true;
     const visits = this.visits.filter(v => v.airportId === airport.id);
     detail.innerHTML = `<button id="close-detail" type="button" class="back-button">← All airports</button><span class="eyebrow">${escape(region.name)} · ${escape(airport.id)}</span><h2>${escape(airport.name)}</h2><p>${escape(airport.description)}</p>
@@ -256,5 +304,5 @@ export class PassportApp {
     finally { input.value = ''; }
   }
 
-  async destroy() { this.events.abort(); this.resize?.disconnect(); this.map?.remove(); await this.store.close(); this.root.replaceChildren(); }
+  async destroy() { this.events.abort(); this.resize?.disconnect(); this.map?.remove(); await this.store.close(); this.root.replaceChildren(); this.root.classList.remove('passport-app'); }
 }
