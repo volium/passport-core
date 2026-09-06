@@ -24,6 +24,7 @@ export class PassportApp {
   private resize?: ResizeObserver;
   private lastFocus?: HTMLElement;
   private passportOpen = false;
+  private initialMapFit = false;
   constructor(private options: { program: PassportProgram }) {
     validateProgram(options.program);
     this.store = new PassportStore(options.program.id);
@@ -58,13 +59,13 @@ export class PassportApp {
       <div class="mobile-toggle" aria-label="Airport view"><button type="button" data-view="map" aria-pressed="true">Map</button><button type="button" data-view="list" aria-pressed="false">List</button></div>
       <div id="airport-list" tabindex="-1" class="airport-list"></div></div><section id="detail" class="detail" hidden aria-label="Airport details"></section></section>
       <section id="passport-panel" class="passport-panel" role="tabpanel" hidden aria-labelledby="passport-tab"><div class="passport-content"><p>${escape(p.description)}</p><p class="local-label">Saved on this device</p><div class="backup-actions"><button id="export" type="button">Export passport</button><label class="button">Import passport<input id="import" type="file" accept="application/json,.json" class="sr-only"></label></div><p id="passport-notice" role="status" aria-live="polite"></p><section class="passport-section"><h3>Your regional passport</h3><div id="regions" class="region-cards"></div></section><p class="data-notice">${escape(p.dataNotice)}</p></div></section>
-      </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><div id="map-style-control" class="map-style-control" hidden><label>Map style<select id="map-style"></select></label></div><div class="map-caption"><span>○ Not visited &nbsp; ✓ Visited</span><button id="fit" type="button">Show all matches</button></div></section></div>
+      </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><div id="map-style-control" class="map-style-control" hidden><label>Map style<select id="map-style"></select></label></div><div class="map-caption"><span>○ Not visited &nbsp; ● Visited</span><button id="fit" type="button">Show all matches</button></div></section></div>
       <p id="notice" role="status" aria-live="polite"></p>`;
     this.setupTheme();
     const connection = () => { this.el('#connection').textContent = navigator.onLine ? '● Local passport' : '○ Offline · airports & visits available'; };
     connection();
     for (const event of ['online', 'offline']) window.addEventListener(event, connection, { signal: this.events.signal });
-    this.map = L.map(this.el('#map'), { zoomControl: false }).setView([p.map.center.latitude, p.map.center.longitude], p.map.zoom);
+    this.map = L.map(this.el('#map'), { zoomControl: false, zoomSnap: 0.25 }).setView([p.map.center.latitude, p.map.center.longitude], p.map.zoom);
     L.control.zoom({ position: 'topright' }).addTo(this.map);
     this.setupMapStyles();
     this.markers.addTo(this.map);
@@ -73,7 +74,10 @@ export class PassportApp {
     });
     this.map.on('zoomend', () => this.render());
     this.resize = new ResizeObserver(() => {
-      if (this.el('#map').clientWidth && this.el('#map').clientHeight) this.map.invalidateSize();
+      if (this.el('#map').clientWidth && this.el('#map').clientHeight) {
+        this.map.invalidateSize();
+        if (!this.initialMapFit) this.initialMapFit = this.fitMatchingAirports();
+      }
     });
     this.resize.observe(this.el('#map'));
     this.el<HTMLInputElement>('#search').addEventListener('input', event => { this.filters.query = (event.target as HTMLInputElement).value; this.render(); });
@@ -84,10 +88,7 @@ export class PassportApp {
       this.root.querySelectorAll('.mobile-toggle button').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
       this.map.invalidateSize();
     }));
-    this.el('#fit').addEventListener('click', () => {
-      const airports = filterAirports(p, this.visits, this.filters);
-      if (airports.length) this.map.fitBounds(airports.map(a => [a.location.latitude, a.location.longitude] as Leaflet.LatLngTuple), { padding: [45, 45], maxZoom: 10 });
-    });
+    this.el('#fit').addEventListener('click', () => this.fitMatchingAirports());
     this.el('#export').addEventListener('click', () => void this.export());
     this.el('#import').addEventListener('change', event => void this.import(event.target as HTMLInputElement));
     const tabs = [this.el('#explore-tab'), this.el('#passport-tab')];
@@ -117,6 +118,24 @@ export class PassportApp {
     try { this.visits = await this.store.list(); }
     catch { this.announce('Device storage could not be opened. Check browser storage permissions before saving visits.'); }
     this.render();
+    if (!this.initialMapFit) this.initialMapFit = this.fitMatchingAirports();
+  }
+
+  private fitMatchingAirports(): boolean {
+    const container = this.el('#map');
+    if (!container.clientWidth || !container.clientHeight) return false;
+    const airports = filterAirports(this.program, this.visits, this.filters);
+    if (!airports.length) return true;
+    // Leave room for the marker outlines, labels, and controls inside the map.
+    const topControls = Math.max(this.el('#map-style-control').offsetHeight, this.el('.leaflet-control-zoom').offsetHeight);
+    const top = Math.min(topControls + 24, container.clientHeight / 4);
+    const bottom = Math.min(this.el('.map-caption').offsetHeight + 48, container.clientHeight / 4);
+    const horizontal = Math.min(36, container.clientWidth / 4);
+    this.map.fitBounds(airports.map(a => [a.location.latitude, a.location.longitude] as Leaflet.LatLngTuple), {
+      paddingTopLeft: [horizontal, top], paddingBottomRight: [horizontal, bottom],
+      maxZoom: airports.length === 1 ? 10 : 19, animate: false,
+    });
+    return true;
   }
 
   private setPassportOpen(open: boolean, focusTab = true) {
@@ -205,7 +224,7 @@ export class PassportApp {
     this.markers.clearLayers();
     for (const airport of airports) {
       const region = p.regions.find(r => r.id === airport.regionId)!;
-      const icon = L.divIcon({ className: 'passport-marker-wrapper', html: `<span class="passport-marker ${visited.has(airport.id) ? 'is-visited' : ''} ${this.selected?.id === airport.id ? 'is-selected' : ''}" style="--region:${region.color}">${visited.has(airport.id) ? '✓' : '✈'}</span>`, iconSize: [40, 40], iconAnchor: [20, 20] });
+      const icon = L.divIcon({ className: 'passport-marker-wrapper', html: `<span aria-hidden="true" class="passport-marker ${visited.has(airport.id) ? 'is-visited' : ''} ${this.selected?.id === airport.id ? 'is-selected' : ''}" style="--region:${region.color}"></span>`, iconSize: [40, 40], iconAnchor: [20, 20] });
       const marker = L.marker([airport.location.latitude, airport.location.longitude], { icon, title: `${airport.id} ${airport.name}${visited.has(airport.id) ? ', visited' : ', not visited'}`, alt: airport.name }).addTo(this.markers).on('click', () => this.select(airport));
       marker.getElement()?.setAttribute('aria-label', `${airport.id} ${airport.name}, ${visited.has(airport.id) ? 'visited' : 'not visited'}`);
       const label = document.createElement('span'); label.textContent = airport.id;

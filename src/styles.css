@@ -64,11 +64,10 @@ progress::-moz-progress-bar { background: var(--region, #438262); }
 .map-caption span { padding: 10px; border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); }
 .map-caption button { pointer-events: auto; font-size: 11px; }
 .passport-marker-wrapper { background: transparent; border: 0; }
-.passport-marker { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: #fff; border: 3px solid var(--region); box-shadow: 0 2px 8px #17372d50; color: #203b38; font-size: 21px; }
-.passport-marker.is-visited { background: var(--region); color: #fff; }
+.passport-marker { display: block; width: 24px; height: 24px; margin: 8px; border-radius: 50%; background: var(--surface); border: 3px solid var(--region); box-shadow: 0 1px 4px #17372d40; }
+.passport-marker.is-visited { background: var(--region); }
 .passport-marker.is-selected { outline: 3px solid #c78424; outline-offset: 4px; }
-.compact-markers .passport-marker:not(.is-selected) { width: 16px; height: 16px; margin: 12px; border-width: 3px; font-size: 0; }
-.compact-markers .passport-marker.is-visited:not(.is-selected) { width: 20px; height: 20px; margin: 10px; font-size: 13px; }
+.compact-markers .passport-marker:not(.is-selected) { width: 16px; height: 16px; margin: 12px; border-width: 3px; }
 .airport-tooltip { background: var(--surface); color: var(--text); border: 0; font-size: 10px; font-weight: 700; padding: 2px 6px; box-shadow: 0 1px 5px #0002; }
 .airport-tooltip::before { display: none; }
 [data-theme='dark'] .dim-basemap .leaflet-tile-pane { filter: brightness(.65) saturate(.75); }

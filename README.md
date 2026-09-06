@@ -38,7 +38,7 @@ Style changes replace only the tile layer and attribution, preserving map positi
 
 Core 0.4.0 uses a viewport-height explorer with a compact header for overall progress and Appearance. Persistent Explore / My passport tabs sit above the sidebar content; desktop airport browsing/details and regional progress scroll independently beside a fully visible map. My passport contains regional progress, Export/Import, and program information. Switching tabs preserves airport selection and unfinished visit fields. On mobile, the tabs sit beneath the header; My passport replaces the main content area, while Explore restores its Map/List choice, filters, and map position. My passport is a regular tabpanel, with no Close button or modal focus trap. Arrow keys and Home/End switch tabs. Airport details remain full-screen on mobile with focus containment, inactive background controls, and Escape dismissal. Short mobile viewports allow page scrolling to keep controls reachable. The app root receives the `passport-app` class for layout.
 
-The sibling app consumes an explicit `vendor/passport-core-0.4.0.tgz` archive, checked into the app repository so CI does not need this checkout or an unpublished registry package.
+The sibling app consumes an explicit `vendor/passport-core-0.4.1.tgz` archive, checked into the app repository so CI does not need this checkout or an unpublished registry package.
 
 After changing this core, run its checks, then from `../fly-washington` run:
 
@@ -55,3 +55,5 @@ Commit the app archive and lockfile together with consuming changes. Increment v
 ## Handoff
 
 See [Planning.md](Planning.md), especially the implementation status near the top, and the app's `docs/DEVELOPMENT.md`. The full captured Washington roster is integrated; remaining work includes dated award eligibility, precise stamp targets, richer configurable filters, GPS evidence, photos, achievements, and Oregon validation. Update the implementation status and relevant contract documentation in every feature change.
+
+Core 0.4.1 fits all participating airports to the initial map viewport, with padding for markers and controls. Show all matches fits the filtered roster; later map navigation stays under user control. Unvisited markers are hollow region-colored circles and visited markers are filled, with accessible status labels and a separate selection outline.
