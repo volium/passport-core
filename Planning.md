@@ -9,6 +9,8 @@
 
 Core 0.4.2: approved legend uses equal-sized hollow/filled CSS circles inside the existing rounded box; Export/Import controls share typography, sizing, and alignment. Single-provider map errors no longer suggest switching styles. Fly Washington now configures CARTO only, with its existing key and native light/dark appearance. Core remains provider-independent.
 
+Core 0.4.3: approved visit feedback stays out of the map. Save confirmation uses a gray disabled button for four seconds with a screen-reader announcement. Deleted visits retain their details with a disabled confirmation, then collapse after four seconds (respecting reduced motion). Deletion updates history in place and preserves unfinished form entries. General feedback appears in the sidebar; backup feedback stays in My passport. Errors remain visible.
+
 ## Implementation status — 2026-09-06
 
 Approved map update (core 0.4.1): the initial map fits participating airport bounds to the measured viewport with marker/control padding and quarter-step zoom precision. Show all matches uses the same fitting logic; subsequent navigation is preserved. Map visits use hollow/filled region-colored circles without airplane/checkmark glyphs, retaining selected outlines and accessible visited labels. Browser coverage checks initial marker visibility across desktop/mobile sizes and visited appearance. Physical mobile acceptance follows deployment.
@@ -21,7 +23,7 @@ UX update: clicking empty map space clears airport selection and closes details 
 
 The first runnable slice now spans both independent repositories. The long-term requirements below remain the roadmap, not a claim that every feature has been delivered.
 
-- Core: TypeScript package `@passport/core` 0.4.2, public models/API, program validation, viewport-height explorer and My passport panel, Leaflet map with selectable styles, synchronized selection and alias-aware filters, IndexedDB schema v1, date-only visits, notes/edit/delete, regional progress, and validated JSON restore. Optional airport reference fields support identifiers, addresses, runways, cautions, and dated source links.
+- Core: TypeScript package `@passport/core` 0.4.3, public models/API, program validation, viewport-height explorer and My passport panel, Leaflet map with selectable styles, synchronized selection and alias-aware filters, IndexedDB schema v1, date-only visits, notes/edit/delete, regional progress, and validated JSON restore. Optional airport reference fields support identifiers, addresses, runways, cautions, and dated source links.
 - App: full 115-airport program-map roster in seven regions, matched uniquely to OurAirports, 153 runway records, source stamp instructions including genuine multiple locations, deterministic generation and reconciliation report, light/dark/system appearance, PWA caching, and gated Pages workflow. The original five airport IDs are preserved. Source coordinates remain distinct from precise GPS targets.
 - Maps: Fly Washington uses Leaflet with CARTO light/dark raster tiles and a dedicated Basemaps key. Core accepts program-configured providers. The worker does not cache or prefetch map tiles. Offline airport/passport functions are available after the production shell is cached; detailed offline basemaps are not promised. See app development notes for provider policy.
 - Package workflow: the app consumes a checked-in versioned core tarball, so app builds do not require an adjacent checkout. `npm run core:pack` explicitly refreshes local changes. Publishing to a registry is deferred.

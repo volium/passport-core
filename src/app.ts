@@ -25,6 +25,7 @@ export class PassportApp {
   private lastFocus?: HTMLElement;
   private passportOpen = false;
   private initialMapFit = false;
+  private saveNoticeTimer?: ReturnType<typeof setTimeout>;
   constructor(private options: { program: PassportProgram }) {
     validateProgram(options.program);
     this.store = new PassportStore(options.program.id);
@@ -32,8 +33,28 @@ export class PassportApp {
   private get program() { return this.options.program; }
   private el<T extends HTMLElement = HTMLElement>(selector: string): T { return this.root.querySelector<T>(selector)!; }
   private announce(message: string) {
-    this.el('#notice').textContent = message;
-    this.el('#passport-notice').textContent = this.passportOpen ? message : '';
+    this.el(this.passportOpen ? '#passport-notice' : '#notice').textContent = message;
+  }
+
+  private confirmVisit(message: string) {
+    clearTimeout(this.saveNoticeTimer);
+    const status = this.el('#save-status');
+    if (!status) return;
+    const button = this.el<HTMLButtonElement>('#checkin button[type="submit"]');
+    const label = button.textContent;
+    button.textContent = 'Visit saved';
+    button.disabled = true;
+    button.classList.add('is-saved');
+    status.classList.add('sr-only');
+    status.textContent = message;
+    this.saveNoticeTimer = setTimeout(() => {
+      if (!button.isConnected) return;
+      button.textContent = label;
+      button.disabled = false;
+      button.classList.remove('is-saved');
+      if (status.textContent === message) status.textContent = '';
+      status.classList.remove('sr-only');
+    }, 4000);
   }
 
   async mount(target: string): Promise<void> {
@@ -52,6 +73,7 @@ export class PassportApp {
       <div id="overall" class="overall"></div><div class="header-actions"><span id="connection" class="connection"></span><label class="theme-label">Appearance<select id="theme" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div></header>
       <div class="workspace" data-view="map" data-section="explore"><aside class="sidebar" aria-label="Passport navigation and airport explorer">
       <div class="primary-tabs" role="tablist" aria-label="Main view"><button id="explore-tab" role="tab" type="button" aria-selected="true" aria-controls="explore-panel">Explore</button><button id="passport-tab" role="tab" type="button" aria-selected="false" aria-controls="passport-panel" tabindex="-1">My passport</button></div>
+      <p id="notice" role="status" aria-live="polite"></p>
       <section id="explore-panel" class="explore-panel" role="tabpanel" aria-labelledby="explore-tab">
       <div class="browse"><div class="section-heading"><h2>Explore airports</h2><span id="match-count" class="count"></span></div>
       <label class="search-label"><span class="sr-only">Search airports</span><input id="search" type="search" placeholder="Search airport name or identifier"></label>
@@ -60,7 +82,7 @@ export class PassportApp {
       <div id="airport-list" tabindex="-1" class="airport-list"></div></div><section id="detail" class="detail" hidden aria-label="Airport details"></section></section>
       <section id="passport-panel" class="passport-panel" role="tabpanel" hidden aria-labelledby="passport-tab"><div class="passport-content"><p>${escape(p.description)}</p><p class="local-label">Saved on this device</p><div class="backup-actions"><button id="export" type="button">Export passport</button><label class="button">Import passport<input id="import" type="file" accept="application/json,.json" class="sr-only"></label></div><p id="passport-notice" role="status" aria-live="polite"></p><section class="passport-section"><h3>Your regional passport</h3><div id="regions" class="region-cards"></div></section><p class="data-notice">${escape(p.dataNotice)}</p></div></section>
       </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><div id="map-style-control" class="map-style-control" hidden><label>Map style<select id="map-style"></select></label></div><div class="map-caption"><div class="map-legend"><span class="map-legend-item"><span class="map-legend-marker" aria-hidden="true"></span>Not visited</span><span class="map-legend-item"><span class="map-legend-marker is-visited" aria-hidden="true"></span>Visited</span></div><button id="fit" type="button">Show all matches</button></div></section></div>
-      <p id="notice" role="status" aria-live="polite"></p>`;
+      `;
     this.setupTheme();
     const connection = () => { this.el('#connection').textContent = navigator.onLine ? '● Local passport' : '○ Offline · airports & visits available'; };
     connection();
@@ -270,37 +292,99 @@ export class PassportApp {
     ${airport.runways?.length ? `<h3>Runways</h3>${airport.runways.map(r => `<p>${escape(r.name)} · ${r.lengthFeet ? `${r.lengthFeet.toLocaleString()} ft` : 'Length unknown'} · ${escape(r.surface ?? 'Surface unknown')}${r.closed ? ' · Closed in source' : ''}</p>`).join('')}` : ''}
     ${airport.sources?.length ? `<p class="airport-sources">Sources: ${airport.sources.map(s => `<a href="${escape(s.url)}" target="_blank" rel="noopener noreferrer">${escape(s.name)}</a> (${escape(s.retrievedAt)})`).join(' · ')}</p>` : ''}
     <h3>Stamp locations</h3>${airport.stampLocations?.length ? airport.stampLocations.map(s => `<article class="stamp"><strong>${escape(s.name)}</strong><p>${escape(s.description)}</p><small>Access: ${escape(s.access.replace('-', ' '))}</small></article>`).join('') : '<p>Stamp details have not been added.</p>'}
-    <form id="checkin"><h3>${edit ? 'Edit visit' : 'Add a visit'}</h3><label>Visit date<input name="date" type="date" required max="${localDate()}" value="${edit?.visitedAt ?? localDate()}"></label><label>Notes <span class="muted">(optional)</span><textarea name="notes" rows="3" maxlength="10000" placeholder="A good landing, a great lunch…">${escape(edit?.notes ?? '')}</textarea></label><p class="muted">Saved locally as an unverified visit. Time is not recorded.</p><button class="primary" type="submit">${edit ? 'Save changes' : 'Save check-in'}</button><p id="save-status" role="status"></p></form>
-    <h3>Visit history <span class="muted">${visits.length}</span></h3><div class="history">${visits.length ? visits.map(v => `<article><strong>${escape(v.visitedAt)}</strong><small>Unverified</small><p>${escape(v.notes || 'No notes for this visit.')}</p><div><button type="button" data-edit="${escape(v.id)}">Edit</button><button type="button" data-delete="${escape(v.id)}">Delete</button></div></article>`).join('') : '<p class="muted">Your first visit is still ahead of you.</p>'}</div>`;
+    <form id="checkin" data-edit-id="${escape(edit?.id ?? '')}"><h3>${edit ? 'Edit visit' : 'Add a visit'}</h3><label>Visit date<input name="date" type="date" required max="${localDate()}" value="${edit?.visitedAt ?? localDate()}"></label><label>Notes <span class="muted">(optional)</span><textarea name="notes" rows="3" maxlength="10000" placeholder="A good landing, a great lunch…">${escape(edit?.notes ?? '')}</textarea></label><p class="muted">Saved locally as an unverified visit. Time is not recorded.</p><button class="primary" type="submit">${edit ? 'Save changes' : 'Save check-in'}</button><p id="save-status" role="status"></p></form>
+    <h3 id="history-heading" tabindex="-1">Visit history <span id="visit-count" class="muted">${visits.length}</span></h3><div class="history">${visits.length ? visits.map(v => `<article><strong>${escape(v.visitedAt)}</strong><small>Unverified</small><p>${escape(v.notes || 'No notes for this visit.')}</p><div><button type="button" data-edit="${escape(v.id)}">Edit</button><button type="button" data-delete="${escape(v.id)}">Delete</button></div></article>`).join('') : '<p class="muted">Your first visit is still ahead of you.</p>'}</div>`;
     this.el('#close-detail').addEventListener('click', () => this.closeDetail());
     this.el<HTMLFormElement>('#checkin').addEventListener('submit', event => {
       event.preventDefault();
-      void this.saveVisit(event.currentTarget as HTMLFormElement, airport, edit);
+      const form = event.currentTarget as HTMLFormElement;
+      void this.saveVisit(form, airport, this.visits.find(visit => visit.id === form.dataset.editId));
     });
     detail.querySelectorAll<HTMLButtonElement>('[data-edit]').forEach(button => button.addEventListener('click', () => { this.renderDetail(this.visits.find(v => v.id === button.dataset.edit)); this.el<HTMLInputElement>('[name="date"]').focus(); }));
     detail.querySelectorAll<HTMLButtonElement>('[data-delete]').forEach(button => button.addEventListener('click', () => void this.deleteVisit(button.dataset.delete!)));
   }
 
   private async saveVisit(form: HTMLFormElement, airport: AirportDefinition, edit?: CheckIn) {
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    if (button.disabled) return;
+    this.el('#save-status').classList.remove('sr-only');
     const data = new FormData(form);
     const date = String(data.get('date'));
     if (!isCalendarDate(date) || date > localDate()) { this.el('#save-status').textContent = 'Choose a valid date today or earlier.'; return; }
-    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     button.disabled = true;
     const now = new Date().toISOString();
     try {
       await this.store.save({ id: edit?.id ?? visitId(), programId: this.program.id, airportId: airport.id, visitedAt: date, timeKnown: false, createdAt: edit?.createdAt ?? now, updatedAt: now, notes: String(data.get('notes')).slice(0, 10000), verification: { status: 'unverified' } });
       this.visits = await this.store.list(); this.render();
-      if (this.selected?.id === airport.id) { this.renderDetail(); this.el('#save-status').textContent = 'Visit saved on this device.'; this.el<HTMLButtonElement>('#checkin button').focus(); }
-      this.announce('Visit saved on this device.');
+      if (this.selected?.id === airport.id) {
+        this.renderDetail();
+        this.confirmVisit('Visit saved on this device.');
+      }
     } catch { if (button.isConnected) this.el('#save-status').textContent = 'Could not save. Your browser may be out of storage. Your entries are still in the form; export existing visits and try again.'; }
     finally { button.disabled = false; }
   }
 
   private async deleteVisit(id: string) {
     if (!window.confirm('Delete this visit from this device? This cannot be undone.')) return;
-    try { await this.store.delete(id); this.visits = await this.store.list(); this.render(); if (this.selected) { this.renderDetail(); this.el('#close-detail').focus(); } this.announce('Visit deleted.'); }
-    catch { this.announce('Could not delete this visit. Please try again.'); }
+    const form = this.el<HTMLFormElement>('#checkin');
+    const detail = this.el('#detail');
+    const scrollTop = detail.scrollTop;
+    const deleteButton = Array.from(detail.querySelectorAll<HTMLButtonElement>('[data-delete]')).find(button => button.dataset.delete === id);
+    const article = deleteButton?.closest('article');
+    const articleHeight = article?.getBoundingClientRect().height ?? 0;
+    const focusTarget = article?.nextElementSibling?.querySelector<HTMLButtonElement>('[data-delete]')
+      ?? article?.previousElementSibling?.querySelector<HTMLButtonElement>('[data-delete]')
+      ?? this.el('#history-heading');
+    if (deleteButton) deleteButton.disabled = true;
+    try {
+      await this.store.delete(id);
+      this.visits = await this.store.list(); this.render();
+      if (form.isConnected) {
+        if (article) {
+          const confirmation = document.createElement('div');
+          confirmation.className = 'deleted-visit';
+          confirmation.style.height = `${articleHeight}px`;
+          article.replaceWith(confirmation);
+          confirmation.append(article);
+          const actions = article.querySelector('div')!;
+          actions.replaceChildren();
+          actions.setAttribute('role', 'status');
+          const message = document.createElement('button');
+          message.type = 'button';
+          message.disabled = true;
+          actions.append(message);
+          message.textContent = 'Visit deleted';
+          setTimeout(() => {
+            if (!confirmation.isConnected) return;
+            const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const animation = confirmation.animate([
+              { height: `${articleHeight}px`, opacity: 1 },
+              { height: '0px', opacity: 0 },
+            ], { duration: reducedMotion ? 0 : 250, easing: 'ease-out', fill: 'forwards' });
+            void animation.finished.then(() => {
+              const history = confirmation.parentElement;
+              confirmation.remove();
+              if (history?.isConnected && !history.children.length) history.innerHTML = '<p class="muted">Your first visit is still ahead of you.</p>';
+            });
+          }, 4000);
+        }
+        const count = this.visits.filter(visit => visit.airportId === this.selected?.id).length;
+        this.el('#visit-count').textContent = String(count);
+        if (form.dataset.editId === id) {
+          form.dataset.editId = '';
+          form.querySelector('h3')!.textContent = 'Add a visit';
+          form.querySelector('button[type="submit"]')!.textContent = 'Save check-in';
+        }
+        focusTarget?.focus({ preventScroll: true });
+        detail.scrollTop = scrollTop;
+      }
+    }
+    catch {
+      const status = this.el('#save-status');
+      if (status) { status.classList.remove('sr-only'); status.textContent = 'Could not delete this visit. Please try again.'; }
+      else this.announce('Could not delete this visit. Please try again.');
+    }
+    finally { if (deleteButton?.isConnected) deleteButton.disabled = false; }
   }
 
   private async export() {
@@ -324,5 +408,5 @@ export class PassportApp {
     finally { input.value = ''; }
   }
 
-  async destroy() { this.events.abort(); this.resize?.disconnect(); this.map?.remove(); await this.store.close(); this.root.replaceChildren(); this.root.classList.remove('passport-app'); }
+  async destroy() { clearTimeout(this.saveNoticeTimer); this.events.abort(); this.resize?.disconnect(); this.map?.remove(); await this.store.close(); this.root.replaceChildren(); this.root.classList.remove('passport-app'); }
 }
