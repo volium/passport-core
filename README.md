@@ -38,7 +38,7 @@ Style changes replace only the tile layer and attribution, preserving map positi
 
 Core 0.4.0 uses a viewport-height explorer with a compact header for overall progress and Appearance. Persistent Explore / My passport tabs sit above the sidebar content; desktop airport browsing/details and regional progress scroll independently beside a fully visible map. My passport contains regional progress, Export/Import, and program information. Switching tabs preserves airport selection and unfinished visit fields. On mobile, the tabs sit beneath the header; My passport replaces the main content area, while Explore restores its Map/List choice, filters, and map position. My passport is a regular tabpanel, with no Close button or modal focus trap. Arrow keys and Home/End switch tabs. Airport details remain full-screen on mobile with focus containment, inactive background controls, and Escape dismissal. Short mobile viewports allow page scrolling to keep controls reachable. The app root receives the `passport-app` class for layout.
 
-The sibling app consumes an explicit `vendor/passport-core-0.4.4.tgz` archive, checked into the app repository so CI does not need this checkout or an unpublished registry package.
+The sibling app consumes an explicit `vendor/passport-core-0.4.5.tgz` archive, checked into the app repository so CI does not need this checkout or an unpublished registry package.
 
 After changing this core, run its checks, then from `../fly-washington` run:
 
@@ -63,3 +63,5 @@ Core 0.4.2: approved legend uses equal-sized hollow/filled CSS circles inside th
 Core 0.4.3: approved visit feedback stays out of the map. Save confirmation uses a gray disabled button for four seconds with a screen-reader announcement. Deleted visits retain their details with a disabled confirmation, then collapse after four seconds (respecting reduced motion). Deletion updates history in place and preserves unfinished form entries. General feedback appears in the sidebar; backup feedback stays in My passport. Errors remain visible.
 
 Core 0.4.4: airport cards, map labels, accessible marker names, and detail headings display the FAA identifier when supplied, falling back to the stable airport ID otherwise. Internal IDs, visits, backups, and alias search remain unchanged. The selected marker and label use dedicated Leaflet panes above ordinary markers and labels; selection changes transfer that priority for every airport.
+
+Core 0.4.5: mobile marker taps open a compact airport preview with name, visit status, region, and an explicit View details action. List selections and desktop selections open details directly. Mobile hides zoom buttons and uses 1.5px marker/legend outlines; desktop uses 3px. General labels appear together for visible airports when spacing permits from two zoom levels earlier; crowded views suppress general labels while preserving the selected label. Panning recomputes label visibility.

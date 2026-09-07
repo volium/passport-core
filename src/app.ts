@@ -26,6 +26,7 @@ export class PassportApp {
   private lastFocus?: HTMLElement;
   private passportOpen = false;
   private initialMapFit = false;
+  private previewOnly = false;
   private saveNoticeTimer?: ReturnType<typeof setTimeout>;
   constructor(private options: { program: PassportProgram }) {
     validateProgram(options.program);
@@ -82,7 +83,7 @@ export class PassportApp {
       <div class="mobile-toggle" aria-label="Airport view"><button type="button" data-view="map" aria-pressed="true">Map</button><button type="button" data-view="list" aria-pressed="false">List</button></div>
       <div id="airport-list" tabindex="-1" class="airport-list"></div></div><section id="detail" class="detail" hidden aria-label="Airport details"></section></section>
       <section id="passport-panel" class="passport-panel" role="tabpanel" hidden aria-labelledby="passport-tab"><div class="passport-content"><p>${escape(p.description)}</p><p class="local-label">Saved on this device</p><div class="backup-actions"><button id="export" type="button">Export passport</button><label class="button">Import passport<input id="import" type="file" accept="application/json,.json" class="sr-only"></label></div><p id="passport-notice" role="status" aria-live="polite"></p><section class="passport-section"><h3>Your regional passport</h3><div id="regions" class="region-cards"></div></section><p class="data-notice">${escape(p.dataNotice)}</p></div></section>
-      </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><div id="map-style-control" class="map-style-control" hidden><label>Map style<select id="map-style"></select></label></div><div class="map-caption"><div class="map-legend"><span class="map-legend-item"><span class="map-legend-marker" aria-hidden="true"></span>Not visited</span><span class="map-legend-item"><span class="map-legend-marker is-visited" aria-hidden="true"></span>Visited</span></div><button id="fit" type="button">Show all matches</button></div></section></div>
+      </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><div id="map-style-control" class="map-style-control" hidden><label>Map style<select id="map-style"></select></label></div><section id="airport-preview" class="airport-preview" hidden aria-label="Selected airport"><div><strong id="preview-name"></strong><p id="preview-meta"></p></div><div class="preview-actions"><button id="preview-details" type="button">View details</button><button id="preview-close" type="button" aria-label="Dismiss airport preview">Close</button></div></section><div class="map-caption"><div class="map-legend"><span class="map-legend-item"><span class="map-legend-marker" aria-hidden="true"></span>Not visited</span><span class="map-legend-item"><span class="map-legend-marker is-visited" aria-hidden="true"></span>Visited</span></div><button id="fit" type="button">Show all matches</button></div></section></div>
       `;
     this.setupTheme();
     const connection = () => { this.el('#connection').textContent = navigator.onLine ? '● Local passport' : '○ Offline · airports & visits available'; };
@@ -100,7 +101,7 @@ export class PassportApp {
     this.map.on('click', () => {
       if (this.selected) this.closeDetail(false);
     });
-    this.map.on('zoomend', () => this.render());
+    this.map.on('zoomend moveend', () => this.render());
     this.resize = new ResizeObserver(() => {
       if (this.el('#map').clientWidth && this.el('#map').clientHeight) {
         this.map.invalidateSize();
@@ -116,6 +117,8 @@ export class PassportApp {
       this.root.querySelectorAll('.mobile-toggle button').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
       this.map.invalidateSize();
     }));
+    this.el('#preview-details').addEventListener('click', () => { this.renderDetail(); this.el('#close-detail').focus(); });
+    this.el('#preview-close').addEventListener('click', () => this.closeDetail(false));
     this.el('#fit').addEventListener('click', () => this.fitMatchingAirports());
     this.el('#export').addEventListener('click', () => void this.export());
     this.el('#import').addEventListener('change', event => void this.import(event.target as HTMLInputElement));
@@ -129,13 +132,13 @@ export class PassportApp {
       });
     });
     const mobile = matchMedia('(max-width: 760px)');
-    mobile.addEventListener('change', () => this.syncPanels(), { signal: this.events.signal });
+    mobile.addEventListener('change', () => { if (!mobile.matches && this.previewOnly && this.selected) this.renderDetail(); this.syncPanels(); }, { signal: this.events.signal });
     this.root.addEventListener('keydown', event => {
       if (event.key === 'Escape') {
         if (!this.passportOpen && this.selected) { event.preventDefault(); this.closeDetail(); }
         return;
       }
-      const panel = !this.passportOpen && this.selected ? this.el('#detail') : undefined;
+      const panel = !this.passportOpen && this.selected && !this.previewOnly ? this.el('#detail') : undefined;
       if (event.key === 'Tab' && mobile.matches && panel) {
         const focusable = [...panel.querySelectorAll<HTMLElement>('button, input, textarea, select, a[href], [tabindex="0"]')].filter(e => !e.hasAttribute('disabled') && e.getClientRects().length > 0);
         const first = focusable[0], last = focusable.at(-1);
@@ -178,14 +181,14 @@ export class PassportApp {
     }
     this.syncPanels();
     if (this.el('#map').clientWidth && this.el('#map').clientHeight) this.map.invalidateSize();
-    if (focusTab) this.el(!open && this.selected && matchMedia('(max-width: 760px)').matches ? '#close-detail' : open ? '#passport-tab' : '#explore-tab').focus({ preventScroll: true });
+    if (focusTab) this.el(!open && this.selected && !this.previewOnly && matchMedia('(max-width: 760px)').matches ? '#close-detail' : open ? '#passport-tab' : '#explore-tab').focus({ preventScroll: true });
   }
 
   private syncPanels() {
     const mobile = matchMedia('(max-width: 760px)').matches;
-    const modal = mobile && !this.passportOpen && !!this.selected;
+    const modal = mobile && !this.passportOpen && !!this.selected && !this.previewOnly;
     for (const selector of ['.app-header', '.map-section', '#notice', '.skip-link', '.primary-tabs']) this.el(selector).inert = modal;
-    this.el('.browse').inert = this.passportOpen || (mobile && !!this.selected);
+    this.el('.browse').inert = this.passportOpen || (mobile && !!this.selected && !this.previewOnly);
     this.el('#detail').inert = this.passportOpen;
     const detail = this.el('#detail');
     if (modal) { detail.setAttribute('role', 'dialog'); detail.setAttribute('aria-modal', 'true'); }
@@ -251,24 +254,66 @@ export class PassportApp {
     }).join('') : '<p class="empty">No airports match. Try a different search or filter.</p>';
     this.root.querySelectorAll<HTMLButtonElement>('[data-airport]').forEach(button => button.addEventListener('click', () => this.select(p.airports.find(a => a.id === button.dataset.airport)!)));
     this.markers.clearLayers();
+    const visibleLabels = new Set<string>();
+    const occupied: { left: number; right: number; top: number; bottom: number }[] = [];
+    const size = this.map.getSize();
+    const markerPositions = airports.map(airport => ({ id: airport.id, point: this.map.latLngToContainerPoint([airport.location.latitude, airport.location.longitude]) }));
+    const candidates = airports.filter(airport => {
+      const point = this.map.latLngToContainerPoint([airport.location.latitude, airport.location.longitude]);
+      return point.x >= 0 && point.x <= size.x && point.y >= 0 && point.y <= size.y;
+    });
+    let labelsFit = this.map.getZoom() >= (p.map.markerDetailZoom ?? 9) - 2;
+    for (const airport of candidates) {
+      if (!labelsFit) break;
+      const point = this.map.latLngToContainerPoint([airport.location.latitude, airport.location.longitude]);
+      const width = airportLabel(airport).length * 7 + 16;
+      const rect = { left: point.x - width / 2, right: point.x + width / 2, top: point.y + 20, bottom: point.y + 44 };
+      if (occupied.some(other => rect.left < other.right + 6 && rect.right > other.left - 6 && rect.top < other.bottom + 6 && rect.bottom > other.top - 6)
+        || markerPositions.some(marker => marker.id !== airport.id && marker.point.x + 12 > rect.left && marker.point.x - 12 < rect.right && marker.point.y + 12 > rect.top && marker.point.y - 12 < rect.bottom)) {
+        labelsFit = false;
+        break;
+      }
+      visibleLabels.add(airport.id);
+      occupied.push(rect);
+    }
+    if (!labelsFit) visibleLabels.clear();
     for (const airport of airports) {
       const region = p.regions.find(r => r.id === airport.regionId)!;
       const selected = this.selected?.id === airport.id;
       const icon = L.divIcon({ className: 'passport-marker-wrapper', html: `<span aria-hidden="true" class="passport-marker ${visited.has(airport.id) ? 'is-visited' : ''} ${this.selected?.id === airport.id ? 'is-selected' : ''}" style="--region:${region.color}"></span>`, iconSize: [40, 40], iconAnchor: [20, 20] });
-      const marker = L.marker([airport.location.latitude, airport.location.longitude], { icon, pane: selected ? 'selectedAirport' : 'markerPane', title: `${airportLabel(airport)} ${airport.name}${visited.has(airport.id) ? ', visited' : ', not visited'}`, alt: airport.name }).addTo(this.markers).on('click', () => this.select(airport));
+      const marker = L.marker([airport.location.latitude, airport.location.longitude], { icon, pane: selected ? 'selectedAirport' : 'markerPane', title: `${airportLabel(airport)} ${airport.name}${visited.has(airport.id) ? ', visited' : ', not visited'}`, alt: airport.name }).addTo(this.markers).on('click', () => this.select(airport, true));
       marker.getElement()?.setAttribute('aria-label', `${airportLabel(airport)} ${airport.name}, ${visited.has(airport.id) ? 'visited' : 'not visited'}`);
       const label = document.createElement('span'); label.textContent = airportLabel(airport);
-      marker.bindTooltip(label, { pane: selected ? 'selectedAirportLabel' : 'tooltipPane', permanent: !compact || selected, direction: 'bottom', offset: [0, 16], className: 'airport-tooltip' });
+      marker.bindTooltip(label, { pane: selected ? 'selectedAirportLabel' : 'tooltipPane', permanent: visibleLabels.has(airport.id) || selected, direction: 'bottom', offset: [0, 16], className: 'airport-tooltip' });
     }
     const progress = calculateProgress(p, this.visits);
     this.el('#overall').innerHTML = `<div><strong>${progress.visited}<span> / ${progress.total}</span></strong><span>airports visited</span></div><progress aria-label="Overall progress" value="${progress.visited}" max="${progress.total || 1}"></progress>`;
     this.el('#regions').innerHTML = progress.regions.map(r => `<article class="region-card" style="--region:${r.color}"><div><span class="region-dot" aria-hidden="true"></span><h3>${escape(r.name)}</h3><span>${r.complete ? '✓ Complete' : `${r.visited} / ${r.total}`}</span></div><progress aria-label="${escape(r.name)} progress" value="${r.visited}" max="${r.total || 1}"></progress><small>${r.complete ? 'Every journey leaves a mark.' : `${r.required} airports to complete this region`}</small></article>`).join('');
   }
 
-  private select(airport: AirportDefinition) {
+  private select(airport: AirportDefinition, fromMap = false) {
     if (this.passportOpen) this.setPassportOpen(false, false);
     if (!this.selected) this.lastFocus = document.activeElement as HTMLElement;
     this.selected = airport;
+    if (fromMap && matchMedia('(max-width: 760px)').matches) {
+      this.previewOnly = true;
+      this.el('#detail').hidden = true;
+      this.el('.browse').hidden = false;
+      this.el('#airport-preview').hidden = false;
+      this.el('.map-section').classList.add('has-preview');
+      this.el('#preview-name').textContent = `${airportLabel(airport)} · ${airport.name}`;
+      const region = this.program.regions.find(r => r.id === airport.regionId)!;
+      this.el('#preview-meta').textContent = `${this.visits.some(v => v.airportId === airport.id) ? 'Visited' : 'Not visited'} · ${region.name}`;
+      this.syncPanels();
+      this.map.invalidateSize();
+      const point = this.map.project([airport.location.latitude, airport.location.longitude]);
+      const height = this.map.getSize().y;
+      const targetY = Math.max(28, (height - this.el('#airport-preview').offsetHeight - 26) / 2 - 10);
+      point.y += height / 2 - targetY;
+      this.map.panTo(this.map.unproject(point));
+      this.render();
+      return;
+    }
     this.map.panTo([airport.location.latitude, airport.location.longitude]);
     this.render();
     this.renderDetail();
@@ -277,6 +322,9 @@ export class PassportApp {
 
   private closeDetail(restoreFocus = true) {
     this.selected = undefined;
+    this.previewOnly = false;
+    this.el('#airport-preview').hidden = true;
+    this.el('.map-section').classList.remove('has-preview');
     this.el('#detail').hidden = true;
     this.el('.browse').hidden = false;
     this.render();
@@ -286,6 +334,9 @@ export class PassportApp {
   }
 
   private renderDetail(edit?: CheckIn) {
+    this.previewOnly = false;
+    this.el('#airport-preview').hidden = true;
+    this.el('.map-section').classList.remove('has-preview');
     const airport = this.selected!;
     const region = this.program.regions.find(r => r.id === airport.regionId)!;
     const detail = this.el('#detail');
