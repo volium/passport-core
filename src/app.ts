@@ -59,7 +59,7 @@ export class PassportApp {
       <div class="mobile-toggle" aria-label="Airport view"><button type="button" data-view="map" aria-pressed="true">Map</button><button type="button" data-view="list" aria-pressed="false">List</button></div>
       <div id="airport-list" tabindex="-1" class="airport-list"></div></div><section id="detail" class="detail" hidden aria-label="Airport details"></section></section>
       <section id="passport-panel" class="passport-panel" role="tabpanel" hidden aria-labelledby="passport-tab"><div class="passport-content"><p>${escape(p.description)}</p><p class="local-label">Saved on this device</p><div class="backup-actions"><button id="export" type="button">Export passport</button><label class="button">Import passport<input id="import" type="file" accept="application/json,.json" class="sr-only"></label></div><p id="passport-notice" role="status" aria-live="polite"></p><section class="passport-section"><h3>Your regional passport</h3><div id="regions" class="region-cards"></div></section><p class="data-notice">${escape(p.dataNotice)}</p></div></section>
-      </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><div id="map-style-control" class="map-style-control" hidden><label>Map style<select id="map-style"></select></label></div><div class="map-caption"><span>○ Not visited &nbsp; ● Visited</span><button id="fit" type="button">Show all matches</button></div></section></div>
+      </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><div id="map-style-control" class="map-style-control" hidden><label>Map style<select id="map-style"></select></label></div><div class="map-caption"><div class="map-legend"><span class="map-legend-item"><span class="map-legend-marker" aria-hidden="true"></span>Not visited</span><span class="map-legend-item"><span class="map-legend-marker is-visited" aria-hidden="true"></span>Visited</span></div><button id="fit" type="button">Show all matches</button></div></section></div>
       <p id="notice" role="status" aria-live="polite"></p>`;
     this.setupTheme();
     const connection = () => { this.el('#connection').textContent = navigator.onLine ? '● Local passport' : '○ Offline · airports & visits available'; };
@@ -204,7 +204,8 @@ export class PassportApp {
     this.tileLayer?.remove();
     this.tileUrl = url;
     this.tileLayer = this.leaflet.tileLayer(url, { attribution: style.attribution, maxZoom: 19 }).on('tileerror', () => {
-      this.announce('Basemap tiles are unavailable. Try another map style or check your connection. Airport markers, the list, and your passport still work.');
+      const suggestion = (this.program.map.styles?.length ?? 1) > 1 ? 'Try another map style or check your connection.' : 'Check your connection.';
+      this.announce(`Basemap tiles are unavailable. ${suggestion} Airport markers, the list, and your passport still work.`);
     }).addTo(this.map);
   }
 
