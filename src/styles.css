@@ -110,8 +110,10 @@ progress::-moz-progress-bar { background: var(--region, #438262); }
 .detail form label { margin: 12px 0; }
 .primary { background: #256b53; color: white; border: 0; width: 100%; margin-top: 14px; }
 .primary:hover { background: #19533e; }
-.primary.is-saved:disabled, .deleted-visit button:disabled { opacity: 1; cursor: default; background: #e4e5e5; color: #626767; }
-[data-theme='dark'] .primary.is-saved:disabled, [data-theme='dark'] .deleted-visit button:disabled { background: #343838; color: #b7bcbc; }
+.primary.is-saved:disabled { opacity: 1; cursor: default; background: #dce9e2; color: #256b53; }
+.deleted-visit button:disabled { opacity: 1; cursor: default; background: #e4e5e5; color: #626767; }
+[data-theme='dark'] .primary.is-saved:disabled { background: #29483b; color: #a8d1b8; }
+[data-theme='dark'] .deleted-visit button:disabled { background: #343838; color: #b7bcbc; }
 .deleted-visit { overflow: hidden; }
 .history article { border-top: 1px solid var(--border); padding: 14px 0; font-size: 13px; }
 .history small { display: block; margin: 5px 0; color: var(--muted); }
