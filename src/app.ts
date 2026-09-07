@@ -4,6 +4,7 @@ import { PassportStore } from './persistence.js';
 import type { AirportDefinition, AirportFilters, CheckIn, MapStyleDefinition, PassportBackup, PassportProgram } from './models.js';
 
 const escape = (text: string): string => text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+const airportLabel = (airport: AirportDefinition): string => airport.identifiers?.faa?.trim() || airport.id;
 const localDate = (): string => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; };
 const visitId = (): string => Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
 
@@ -88,6 +89,11 @@ export class PassportApp {
     connection();
     for (const event of ['online', 'offline']) window.addEventListener(event, connection, { signal: this.events.signal });
     this.map = L.map(this.el('#map'), { zoomControl: false, zoomSnap: 0.25 }).setView([p.map.center.latitude, p.map.center.longitude], p.map.zoom);
+    // Selected airports must sit above both ordinary markers and their labels.
+    this.map.createPane('selectedAirport').style.zIndex = '660';
+    const selectedLabels = this.map.createPane('selectedAirportLabel');
+    selectedLabels.style.zIndex = '670';
+    selectedLabels.style.pointerEvents = 'none';
     L.control.zoom({ position: 'topright' }).addTo(this.map);
     this.setupMapStyles();
     this.markers.addTo(this.map);
@@ -241,17 +247,18 @@ export class PassportApp {
     this.el('#match-count').textContent = String(airports.length);
     this.el('#airport-list').innerHTML = airports.length ? airports.map(a => {
       const region = p.regions.find(r => r.id === a.regionId)!;
-      return `<button class="airport-card" data-airport="${escape(a.id)}" aria-pressed="${this.selected?.id === a.id}"><span class="airport-code" style="--region:${region.color}">${escape(a.id)}</span><span class="airport-name"><strong>${escape(a.name)}</strong><small>${escape(region.name)}</small></span><span class="visit-state" aria-label="${visited.has(a.id) ? 'Visited' : 'Not visited'}">${visited.has(a.id) ? '✓' : '○'}</span></button>`;
+      return `<button class="airport-card" data-airport="${escape(a.id)}" aria-pressed="${this.selected?.id === a.id}"><span class="airport-code" style="--region:${region.color}">${escape(airportLabel(a))}</span><span class="airport-name"><strong>${escape(a.name)}</strong><small>${escape(region.name)}</small></span><span class="visit-state" aria-label="${visited.has(a.id) ? 'Visited' : 'Not visited'}">${visited.has(a.id) ? '✓' : '○'}</span></button>`;
     }).join('') : '<p class="empty">No airports match. Try a different search or filter.</p>';
     this.root.querySelectorAll<HTMLButtonElement>('[data-airport]').forEach(button => button.addEventListener('click', () => this.select(p.airports.find(a => a.id === button.dataset.airport)!)));
     this.markers.clearLayers();
     for (const airport of airports) {
       const region = p.regions.find(r => r.id === airport.regionId)!;
+      const selected = this.selected?.id === airport.id;
       const icon = L.divIcon({ className: 'passport-marker-wrapper', html: `<span aria-hidden="true" class="passport-marker ${visited.has(airport.id) ? 'is-visited' : ''} ${this.selected?.id === airport.id ? 'is-selected' : ''}" style="--region:${region.color}"></span>`, iconSize: [40, 40], iconAnchor: [20, 20] });
-      const marker = L.marker([airport.location.latitude, airport.location.longitude], { icon, title: `${airport.id} ${airport.name}${visited.has(airport.id) ? ', visited' : ', not visited'}`, alt: airport.name }).addTo(this.markers).on('click', () => this.select(airport));
-      marker.getElement()?.setAttribute('aria-label', `${airport.id} ${airport.name}, ${visited.has(airport.id) ? 'visited' : 'not visited'}`);
-      const label = document.createElement('span'); label.textContent = airport.id;
-      marker.bindTooltip(label, { permanent: !compact || this.selected?.id === airport.id, direction: 'bottom', offset: [0, 16], className: 'airport-tooltip' });
+      const marker = L.marker([airport.location.latitude, airport.location.longitude], { icon, pane: selected ? 'selectedAirport' : 'markerPane', title: `${airportLabel(airport)} ${airport.name}${visited.has(airport.id) ? ', visited' : ', not visited'}`, alt: airport.name }).addTo(this.markers).on('click', () => this.select(airport));
+      marker.getElement()?.setAttribute('aria-label', `${airportLabel(airport)} ${airport.name}, ${visited.has(airport.id) ? 'visited' : 'not visited'}`);
+      const label = document.createElement('span'); label.textContent = airportLabel(airport);
+      marker.bindTooltip(label, { pane: selected ? 'selectedAirportLabel' : 'tooltipPane', permanent: !compact || selected, direction: 'bottom', offset: [0, 16], className: 'airport-tooltip' });
     }
     const progress = calculateProgress(p, this.visits);
     this.el('#overall').innerHTML = `<div><strong>${progress.visited}<span> / ${progress.total}</span></strong><span>airports visited</span></div><progress aria-label="Overall progress" value="${progress.visited}" max="${progress.total || 1}"></progress>`;
@@ -286,7 +293,7 @@ export class PassportApp {
     this.syncPanels();
     this.el('.browse').hidden = true;
     const visits = this.visits.filter(v => v.airportId === airport.id);
-    detail.innerHTML = `<button id="close-detail" type="button" class="back-button">← All airports</button><span class="eyebrow">${escape(region.name)} · ${escape(airport.id)}</span><h2>${escape(airport.name)}</h2><p>${escape(airport.description)}</p>
+    detail.innerHTML = `<button id="close-detail" type="button" class="back-button">← All airports</button><span class="eyebrow">${escape(region.name)} · ${escape(airportLabel(airport))}</span><h2>${escape(airport.name)}</h2><p>${escape(airport.description)}</p>
     ${airport.address ? `<p class="airport-address">${escape(airport.address)}</p>` : ''}
     ${airport.cautions?.map(c => `<p class="airport-caution">${escape(c)}</p>`).join('') ?? ''}
     ${airport.runways?.length ? `<h3>Runways</h3>${airport.runways.map(r => `<p>${escape(r.name)} · ${r.lengthFeet ? `${r.lengthFeet.toLocaleString()} ft` : 'Length unknown'} · ${escape(r.surface ?? 'Surface unknown')}${r.closed ? ' · Closed in source' : ''}</p>`).join('')}` : ''}
