@@ -1,13 +1,25 @@
 # Aviation Passport Platform
 ## Architecture, Requirements, and Implementation Plan
 
-**Status:** Full Washington airport roster integrated and locally tested; WebKit offline caveat remains (2026-09-06)
+**Status:** Current implementation: Leaflet/CARTO with the full Washington roster. Approved target: MapLibre GL JS/PMTiles offline maps; migration and validation pending (2026-09-12).
 
 **Primary repositories:** `passport-core` (called `core-passport` below), `fly-washington`
 
 **Future reference implementation:** `explore-oregon`
 
-Core 0.4.2: approved legend uses equal-sized hollow/filled CSS circles inside the existing rounded box; Export/Import controls share typography, sizing, and alignment. Single-provider map errors no longer suggest switching styles. Fly Washington now configures CARTO only, with its existing key and native light/dark appearance. Core remains provider-independent.
+## Approved offline-map architecture update — 2026-09-12
+
+MapLibre GL JS will replace Leaflet. A program-owned, self-hosted PMTiles archive of the OpenStreetMap-derived Protomaps basemap will supply the same basemap online and offline, with local light/dark styling. Fly Washington will no longer require CARTO, an API key, or a hosted-provider selector. GitHub Pages remains the deployment target; no backend or tile server is introduced.
+
+The shared core owns rendering, PMTiles integration, package contracts, storage abstractions, lifecycle, readiness UI, and default styling. Fly Washington owns the Washington extract, coverage, independent map versions, generation/release process, and visual overrides. Airport/passport data and user visits remain separate from the basemap.
+
+This is approved future work, not an implemented feature. MapLibre rendering, verified downloads, persistence requests, and offline-map status UI do not yet exist. Sections 16–17 and 32–34 define the target; Section 70 adds the migration sequence and required z9–z13 experiment. z12 is a starting experimental target; z11/z12 and an archive under 100 MB are expectations pending measurement, not measured results or shipping commitments.
+
+## Current implementation and historical release record
+
+The following release notes describe the existing Leaflet system and its history. Their renderer/provider details are superseded by the approved target above; their product behavior must survive migration.
+
+Core 0.4.2: approved legend uses equal-sized hollow/filled CSS circles inside the existing rounded box; Export/Import controls share typography, sizing, and alignment. Single-provider map errors no longer suggest switching styles. At this milestone, Fly Washington switched to CARTO only, with its existing key and native light/dark appearance. The implemented core retains program-configured raster-provider support.
 
 Core 0.4.3: approved visit feedback stays out of the map. Save confirmation uses a gray disabled button for four seconds with a screen-reader announcement. Deleted visits retain their details with a disabled confirmation, then collapse after four seconds (respecting reduced motion). Deletion updates history in place and preserves unfinished form entries. General feedback appears in the sidebar; backup feedback stays in My passport. Errors remain visible.
 
@@ -21,7 +33,7 @@ Approved map update (core 0.4.1): the initial map fits participating airport bou
 
 Explorer layout update: the owner approved the desktop approach in core 0.4.0. Persistent Explore / My passport tabs now control the content beside the anchored desktop map. The compact header holds overall progress and Appearance. Airport browsing, details, and passport content scroll independently. My passport contains regional completion, Export/Import, and program information; switching tabs preserves selection and unfinished visit fields. On mobile, the same tabs control the main content beneath the header, restoring Map/List state when returning to Explore. My passport is not a modal; airport details remain a full-screen mobile panel. Tests and packaging can proceed following desktop approval; physical mobile acceptance is planned after the next deployment.
 
-Map preference update: core 0.3.0 supports program-configured map styles with optional native dark tiles, a saved per-program choice, and live appearance switching. Fly Washington offers OpenStreetMap and, when a dedicated CARTO Basemaps key is configured, CARTO Positron/Dark Matter as in the earlier `volium/fwpp` app. Provider configuration stays in the app; tile switching does not change map position, airport selection, or unfinished visits. Map tiles remain outside service-worker caching. CARTO setup and validation are documented in the app development notes.
+Historical map preference update (core 0.3.0): program-configured raster styles added optional native dark tiles, a saved per-program choice, and live appearance switching. Fly Washington then offered OpenStreetMap and keyed CARTO Positron/Dark Matter as in the earlier `volium/fwpp` app; core 0.4.2 subsequently configured CARTO only. Provider configuration stayed in the app; tile switching preserved map position, selection, and unfinished visits. In this implemented system, map tiles remain outside service-worker caching. The app development notes document the current CARTO setup, to be retired after migration tests pass.
 
 UX update: clicking empty map space clears airport selection and closes details while preserving map position, zoom, region styling, and visited status. Dragging and zooming preserve selection; another marker click switches airports. This behavior belongs to the shared core; the app consumes the refreshed package and owns browser regression coverage.
 
@@ -29,7 +41,7 @@ The first runnable slice now spans both independent repositories. The long-term 
 
 - Core: TypeScript package `@passport/core` 0.4.5, public models/API, program validation, viewport-height explorer and My passport panel, Leaflet map with selectable styles, synchronized selection and alias-aware filters, IndexedDB schema v1, date-only visits, notes/edit/delete, regional progress, and validated JSON restore. Optional airport reference fields support identifiers, addresses, runways, cautions, and dated source links.
 - App: full 115-airport program-map roster in seven regions, matched uniquely to OurAirports, 153 runway records, source stamp instructions including genuine multiple locations, deterministic generation and reconciliation report, light/dark/system appearance, PWA caching, and gated Pages workflow. The original five airport IDs are preserved. Source coordinates remain distinct from precise GPS targets.
-- Maps: Fly Washington uses Leaflet with CARTO light/dark raster tiles and a dedicated Basemaps key. Core accepts program-configured providers. The worker does not cache or prefetch map tiles. Offline airport/passport functions are available after the production shell is cached; detailed offline basemaps are not promised. See app development notes for provider policy.
+- Maps (current implementation only): Fly Washington uses Leaflet with CARTO light/dark raster tiles and a dedicated Basemaps key. Core accepts program-configured providers. The worker does not cache or prefetch map tiles. Offline airport/passport functions are available after the production shell is cached; this implementation has no complete offline basemap. The approved replacement must provide first offline startup with a usable basemap after explicit package installation, as specified in Sections 32–33.
 - Package workflow: the app consumes a checked-in versioned core tarball, so app builds do not require an adjacent checkout. `npm run core:pack` explicitly refreshes local changes. Publishing to a registry is deferred.
 - Tests: core domain/storage tests and app configuration tests pass. Desktop/mobile Chromium and mobile WebKit cover the main workflow; Chromium also passes offline reload/save. Remote CI failed in WebKit offline reload with the same internal navigation error seen locally. The app now tests open-app offline saving separately on every browser and conditionally skips only that exact WebKit offline reload error after checking service-worker control and cached HTML. Physical iPhone offline startup verification and a successful remote rerun remain open. See app handoff notes for details.
 - Coordinate review: the owner approved the program map position for Copalis and the OurAirports position for Port of Whitman. Both source disagreements remain documented as resolved in the app's reconciliation report; missing region values use their source map layers.
@@ -119,6 +131,8 @@ Examples include:
 
 Program-specific facts and rules belong in the program repository.
 
+For the approved map migration, generic functionality includes MapLibre rendering, PMTiles protocol registration, typed package validation, download/update/delete and availability behavior, storage estimation and persistence requests, reusable status/error UI, default basemap styles, and program overlays. Browser storage operations belong behind testable core abstractions, not scattered through UI code.
+
 ---
 
 ## 3.3 The core must not know about specific programs
@@ -192,6 +206,8 @@ The initial architecture does **not** include a required `passport-backend` serv
 
 Cloud functionality may be added later as an optional adapter or enhancement, but the application must not depend on it.
 
+Cache the small application shell and program data independently. A complete basemap is a separate explicit user download, including every required local rendering resource. Shell, program data, user data, and basemap readiness must be reported separately. An absent map package must not prevent airport/passport use (Sections 32–34).
+
 ---
 
 ## 3.6 No account is required
@@ -238,6 +254,8 @@ For example, program configuration may determine:
 
 This separation prevents the shared core from imposing one program's visual model on another.
 
+Airports, passport regions, stamp locations, visits, and marker state must never be embedded in PMTiles. Program JSON/GeoJSON and local passport records drive dynamic MapLibre sources/layers above the basemap. Airport identity and coordinate accuracy remain independent of OpenStreetMap features.
+
 ---
 
 ## 3.9 Defaults belong in the core; policy belongs in programs
@@ -256,6 +274,8 @@ Examples include:
 - region styling;
 - photo limits;
 - progress presentation.
+
+For basemaps, core supplies reusable light/dark styling and generic package lifecycle behavior. Programs supply coverage, versioned artifacts/resources, and visual overrides; Section 17 defines their typed contract.
 
 ---
 
@@ -288,6 +308,10 @@ core-passport/
 │   ├── airport/
 │   ├── checkin/
 │   ├── map/
+│   │   ├── renderer/
+│   │   ├── basemap/
+│   │   ├── offline/
+│   │   └── style/
 │   ├── verification/
 │   ├── progress/
 │   ├── achievements/
@@ -332,6 +356,8 @@ The core must expose a deliberate public API from `src/index.ts`.
 
 Consumers should not be encouraged to import arbitrary internal files.
 
+The map modules own MapLibre/PMTiles integration, the typed offline-package contract, generic install/update/rollback/delete behavior, availability checks, browser storage adapters, status UI, and overridable default styling. This is a suggested growth layout: the current core uses flat `src/app.ts`, `src/models.ts`, and `src/persistence.ts`. Introduce modules as the migration needs them; unrelated file moves are not required.
+
 ---
 
 # 4.2 `fly-washington`
@@ -347,6 +373,7 @@ fly-washington/
 │   │   ├── program.ts
 │   │   ├── regions.ts
 │   │   ├── airports.ts
+│   │   ├── map.ts
 │   │   ├── stamp-locations.ts
 │   │   ├── achievements.ts
 │   │   ├── verification.ts
@@ -362,7 +389,10 @@ fly-washington/
 ├── public/
 │   ├── manifest.webmanifest
 │   ├── icons/
+│   ├── maps/                  # generated deployment assets, not necessarily Git-tracked
+│   │   └── <version>/         # Washington PMTiles and required map resources
 │   └── ...
+├── scripts/                  # reproducible map-package generation/release tooling
 ├── tests/
 │   ├── program/
 │   ├── integration/
@@ -388,6 +418,8 @@ The repository owns:
 - program-specific explanatory text.
 
 The application should be thin.
+
+Fly Washington also owns Washington map-package metadata in the existing `src/program/map.ts`, the generated PMTiles artifact or static release location, bounds and 25–50 mile buffer, measured zoom/detail policy, Washington style overrides, and package generation/release automation. Preserve the existing `airports.generated.json`, `regions.json`, and typed loaders as independent program data. The app owns deployment integration and E2E coverage; it must not duplicate core package-management logic. Section 33 defines release requirements; `public/maps/` illustrates deployment output, not a requirement to commit a large binary.
 
 Its basic composition should resemble:
 
@@ -466,12 +498,7 @@ This provides convenient navigation while preserving repository independence.
 
 During local development, `fly-washington` must be able to consume the developer's local checkout of `core-passport`.
 
-The mechanism may use:
-
-- npm link;
-- a local package reference;
-- a local packed npm package;
-- another standard package-development mechanism.
+The implemented mechanism is a checked-in versioned npm tarball. After core checks pass and the intended core version is set in the app dependency, run `npm run core:pack` in `fly-washington` to pack the sibling core and refresh the app install/lockfile. App CI must work without the sibling checkout. Other local-development mechanisms are optional, not replacements for the release workflow.
 
 Production builds and CI must **not** dynamically consume whichever core happens to be latest.
 
@@ -482,12 +509,14 @@ Example:
 ```json
 {
   "dependencies": {
-    "@passport/core": "^0.4.0"
+    "@passport/core": "file:vendor/passport-core-0.4.5.tgz"
   }
 }
 ```
 
 Core upgrades should therefore occur through normal dependency updates.
+
+For the map migration, package a new tested core version, then update the app dependency, checked-in tarball, and lockfile together with consuming changes. Registry publication remains deferred. Map-package versions are independent of core and airport-data versions; a basemap update must never rewrite user passport data.
 
 Dependabot or Renovate should eventually be configured to create dependency upgrade pull requests automatically.
 
@@ -566,6 +595,8 @@ export interface PassportProgram {
 ```
 
 This interface is illustrative rather than frozen.
+
+`PassportProgram.map` must carry the approved typed PMTiles package and styling contract in Section 17. These new fields describe the target API, not fields already accepted by core 0.4.5. Preserve existing program identity, region/airport models, and visual semantics when introducing them.
 
 The implementation should favor explicit models over loosely structured generic objects.
 
@@ -844,6 +875,23 @@ The map must support:
 - interaction with airport list;
 - program-controlled defaults.
 
+## 16.1 Approved renderer and basemap
+
+MapLibre GL JS is the selected map library. The default and primary basemap is a program-owned PMTiles archive derived from Protomaps/OpenStreetMap. Core registers and manages the PMTiles protocol and renders program overlays above the basemap. The documented integration uses MapLibre's custom protocol facility; implementation must pin compatible renderer, reader, style, and basemap-schema versions. See [MapLibre addProtocol](https://maplibre.org/maplibre-gl-js/docs/API/functions/addProtocol/) and [Protomaps MapLibre integration](https://docs.protomaps.com/pmtiles/maplibre).
+
+Online without an installed package, read necessary PMTiles byte ranges from static hosting. Offline, read the complete verified installed archive through the core storage adapter. Both modes use the same archive content and style definition for the selected version; an installed older version may remain active until its replacement is validated. There is no online CARTO/offline PMTiles split. Range loading is documented in [PMTiles concepts](https://docs.protomaps.com/pmtiles/); it is not evidence of a complete offline installation.
+
+## 16.2 Renderer migration must preserve product behavior
+
+- Fit participating airports to the measured initial viewport with marker/control padding and the existing quarter-step zoom precision. Show all matches uses the same fit logic; later navigation stays under user control. Verify equivalent visible bounds in MapLibre rather than depending on Leaflet internals.
+- Preserve region-colored hollow/filled visited markers, selected outlines, responsive marker/legend sizes, and completed-region styling. Keep selected markers and labels above ordinary ones; Leaflet panes are the current mechanism, not a target dependency.
+- Keep FAA identifier display with stable-ID fallback, accessible marker names, compact/detail behavior, and viewport spacing rules for labels. Preserve the selected label in crowded views and recalculate general label visibility after panning/zooming.
+- Empty-map clicks clear selection and close details without changing view or visit state. Dragging/zooming preserve selection; another marker switches it. Mobile marker taps open the compact preview with an explicit View details action; list and desktop selections open details directly.
+- Preserve filters, matching counts, map/list synchronization, desktop anchored-map layout, mobile Map/List restoration, Explore/My passport tabs, focus management, keyboard operation, and non-color state indicators.
+- Light/dark/system appearance changes restyle the same basemap and overlays while preserving view, selection, filters, and unfinished visit fields. Download, update, deletion, and basemap errors must also preserve unfinished visits and existing save/delete feedback behavior.
+
+Basemap absence must leave airport overlays usable on a neutral map background, with list/details/visits available and an actionable status. If rendering itself is unavailable, the accessible list and passport workflow remain available. Section 58 defines regression and physical-device validation; this migration authorizes no change to these product behaviors.
+
 ---
 
 # 17. Program Map Configuration
@@ -865,14 +913,61 @@ Each program should be able to configure:
 - legend appearance;
 - deemphasis/muting behavior.
 
-Conceptually:
+Approved target contract (illustrative types, extending existing `map.center`, `map.zoom`, and `markerDetailZoom` conventions):
 
 ```ts
+interface Bounds {
+    west: number;
+    south: number;
+    east: number;
+    north: number;
+}
+
+interface MapResource {
+    id: string;
+    url: string;
+    kind: "style" | "sprite" | "glyph" | "font" | "license" | "other";
+    sizeBytes: number;
+    sha256: string;
+}
+
+interface OfflineMapPackage {
+    id: string;
+    name: string;
+    url: string;
+    version: string;
+    sizeBytes: number;          // archive bytes; additional resources counted separately
+    bounds: Bounds;
+    minZoom?: number;           // omitted means 0
+    maxNativeZoom: number;
+    attribution: string;
+    sha256: string;
+    sourceBuild: string;
+    basemapSchemaVersion: string;
+    licenses: { name: string; url: string; resourceId: string }[];
+    resources: MapResource[];   // concrete files, not unresolved URL templates
+}
+
+interface BasemapStyleConfig {
+    defaultStyleVersion: string;
+    lightStyleResourceId: string;
+    darkStyleResourceId: string;
+    // Program-owned typed MapLibre style overrides, validated after composition.
+    overrides?: {
+        light?: import("maplibre-gl").StyleSpecification;
+        dark?: import("maplibre-gl").StyleSpecification;
+    };
+}
+
 interface MapConfig {
-    initialView: {
-        latitude: number;
-        longitude: number;
-        zoom: number;
+    center: { latitude: number; longitude: number };
+    zoom: number;
+    markerDetailZoom?: number;
+    bounds?: Bounds;
+    basemap: {
+        type: "pmtiles";
+        package: OfflineMapPackage;
+        style: BasemapStyleConfig;
     };
 
     clustering?: ClusterConfig;
@@ -887,6 +982,16 @@ interface MapConfig {
     regionBoundaries?: RegionBoundaryConfig;
 }
 ```
+
+The core supplies default light/dark style definitions and composes any program overrides into validated effective styles at build time. The resource IDs identify those resulting local styles. Complete style overrides may affect only basemap presentation and required resource declarations; they must not replace core-owned dynamic overlay sources or semantic state. The app publishes the resolved resource manifest with its map package. Core owns contract implementation and validation; Fly Washington supplies its values.
+
+Package identity is stable within a program; storage keys include program ID, package ID, and version. Display names and URLs are not identity. Versions are opaque immutable release identifiers: inequality between installed and program-advertised versions signals an available replacement, not lexical or numeric ordering. The advertised release is authoritative, allowing a deliberate rollback to an earlier release. A change to archive bytes or required resources creates a new package version. Style resources may change without regenerating archive bytes; airport-data releases require neither operation.
+
+Show archive size, total required resource size, and additional download/storage requirements before the user starts. Package metadata includes measured bytes, checksum, coverage, native zoom, pinned source, schema compatibility, attribution, and local license notices. Renderer zoom above native detail must not imply additional basemap detail or increase the archive's coverage.
+
+Reject missing/duplicate IDs, empty versions, unsafe or unresolved URLs, invalid checksums, nonpositive archive sizes, invalid resource sizes, malformed or reversed bounds, out-of-range coordinates, noninteger or reversed zoom ranges, incompatible schemas/styles, missing attribution/licenses, and missing resource references. Validate overrides and their entire resource dependency set. CI must fail malformed program configuration; runtime errors remain actionable without damaging passport records.
+
+The current `tileUrl`, `darkTileUrl`, and raster `styles` contract belongs to Leaflet. Document its compatibility/deprecation path in the new core release, then remove the app's obsolete configuration after migration coverage passes. Retire saved provider preferences with a deterministic fallback to the default PMTiles style while preserving appearance preference and passport data. A future `BasemapProvider` extension may support hosted providers; implementing multiple providers or a provider selector is not required for this migration.
 
 ---
 
@@ -1210,6 +1315,8 @@ Local persistence should contain concepts such as:
 
 Static airport/program data may normally be bundled with the application rather than duplicated into the user database.
 
+Large basemap archives use the separate core storage abstraction in Section 33. They are replaceable program assets, not passport records, and are excluded from passport JSON/ZIP backups. Map package deletion/update must not migrate or erase visit data.
+
 ---
 
 # 31. Data Migration
@@ -1234,13 +1341,13 @@ Migration tests should be added when schema versions change.
 
 # 32. Offline Requirements
 
-Once installed/loaded appropriately, the application must continue to provide its core functionality without Internet access.
+After the small application shell and program data have been cached, the application must provide its core functionality without Internet access. After the user explicitly downloads and installs the complete program map package, the map must also be usable on the first offline launch, including areas never previously viewed within the package coverage. Installation of a PWA alone must not trigger a large map download.
 
 Offline capabilities include:
 
 - opening the application;
 - viewing static airport data;
-- viewing the map to the extent locally cached map technology permits;
+- viewing program overlays without a basemap, or the complete covered basemap after package installation;
 - airport list;
 - filters;
 - airport details;
@@ -1253,27 +1360,127 @@ Offline capabilities include:
 
 Program data should be distributed with the application so it does not require a runtime program-data server.
 
+## 32.1 Independent readiness states
+
+The core's reusable offline summary must report application-shell, program-data, user-data, and basemap readiness independently. A stored download flag, service-worker control, or previously viewed map area is not sufficient evidence of basemap availability. Show actual local-storage failures for user data independently of map errors; the map lifecycle must never delete user records to make room.
+
+Illustrative wording (size is populated from measurements, not this example):
+
+```text
+Offline availability
+Application shell        Ready
+Passport data            Ready
+Washington basemap       <measured size> · Available offline
+User data                Stored locally
+```
+
+## 32.2 Offline-map status and actions
+
+Installation state, update status, and persistence status are separate dimensions. For example, an installed working version can coexist with an available update or a failed replacement download.
+
+| State | Meaning and available action |
+| --- | --- |
+| Not downloaded | No installed package; offer Download with measured size and coverage. |
+| Checking storage | Verify bytes and required resources before claiming offline availability. |
+| Downloading | Show received bytes and percentage when total is known; allow Cancel. |
+| Installed / available offline | Complete validated package and required resources are currently readable locally. |
+| Update available | Advertised version differs; offer Update and keep the usable installed version active. |
+| Insufficient storage | Explain needed space and offer retry or explicit map deletion; retain the working version. |
+| Download interrupted or failed | Offer Retry; staged bytes do not count as installed. |
+| Integrity check failed | Reject the candidate, explain failure, and offer a clean retry. |
+| Missing or evicted | Previously installed bytes/resources are absent; return to download required and offer redownload. |
+| Persistence granted / not granted / unavailable | Report storage protection separately; it does not prove package presence. |
+
+Provide concise accessible status text, keyboard-operable Download/Cancel/Retry/Update/Delete controls, and screen-reader progress/completion/error announcements without excessive repetition. Offline users can delete an installed map and see that a later download requires a connection. Missing basemap messages must not cover controls or prevent airport/list/passport use.
+
 ---
 
-# 33. Map Tiles and Offline Caveat
+# 33. Offline Map Package Architecture
 
-Application functionality and airport data must be offline-first.
+The approved V1 solution is a complete downloadable PMTiles package with all resources needed to render it. Opportunistic HTTP or service-worker tile caching is not the offline solution. The currently implemented Leaflet/CARTO limitations in the status record do not limit this target.
 
-Third-party map basemap imagery/tiles may have separate caching, licensing, and offline limitations depending on the map provider selected.
+## 33.1 Coverage and basemap contents
 
-The architecture must not make passport data inaccessible merely because basemap tiles are unavailable.
+Fly Washington initially uses uniform statewide Washington coverage with a 25–50 mile geographic buffer covering adjoining Oregon, Idaho, British Columbia, and coastal areas. The app team records the exact buffer distance and bounding box/polygon during the Section 70 experiment. Airport data must remain available beyond the basemap boundary; the UI must accurately describe package coverage.
 
-The selected map library/provider must therefore be evaluated specifically for:
+Include useful orientation context:
 
-- GitHub Pages compatibility;
-- PWA behavior;
-- offline/cache behavior;
-- licensing;
-- cost;
-- marker customization;
-- TypeScript support.
+- land and water;
+- state and international boundaries;
+- major rivers and geographic features;
+- interstate, US, and state highways;
+- major local roads appropriate to the selected zoom;
+- cities and towns;
+- useful parks and national forests.
 
-Map library selection remains an implementation decision.
+Exclude or heavily reduce buildings, addresses, businesses/general POIs, parcels, house numbers, parking lots, high-detail residential streets, paths, and transit detail. This is a content policy to validate against the pinned [Protomaps basemap layers](https://docs.protomaps.com/basemaps/layers). Hiding a layer only changes rendering; do not report size savings unless the generated archive actually removes or reduces its data. The app's experiment must document any required reproducible content filtering or generation work and resulting bytes.
+
+Participating airports and their precise locations are authoritative program data. Airport identity, passport regions, stamp locations, visits, and marker state are excluded from PMTiles and rendered as dynamic overlays. Basemap aerodrome features, if present for context, must not be treated as participation or coordinate authority.
+
+## 33.2 Complete local rendering resources
+
+Install the archive plus the effective light/dark styles, sprite JSON/images and applicable resolution variants, glyph ranges/font stacks, fonts where used, other referenced assets, and attribution/license notices. Bundle MapLibre/PMTiles runtime code, CSS, and required workers with the locally cached application shell. Resolve every style reference to a declared locally available resource, including program overrides and labels anywhere in coverage; viewing an area online first must not be necessary.
+
+Core provides default styling and dependency validation; the program's build/release process publishes the resolved resource set. Small shared resources may be cached with the shell, but basemap readiness must verify their presence and compatibility too. App-shell cache cleanup must not remove resources still needed by an installed or rollback package. Avoid runtime CDN dependencies. Appearance switching must work offline without downloading another basemap archive.
+
+Protomaps documents self-hostable fontstack and sprite assets in [Basemaps for MapLibre](https://docs.protomaps.com/basemaps/maplibre). Validate the effective style against the [MapLibre style specification](https://maplibre.org/maplibre-style-spec/), including [glyphs](https://maplibre.org/maplibre-style-spec/glyphs/) and [sprites](https://maplibre.org/maplibre-style-spec/sprite/). A `.pmtiles` archive alone is not an offline-complete map.
+
+## 33.3 Download, verification, and activation
+
+1. Validate configuration and compare the advertised package version with any installed version. Show coverage, measured archive/resource bytes, and additional storage needed before explicit user initiation.
+2. Estimate available storage and request persistence where supported (Section 33.4). Budget for the existing working package, full candidate, additional resources, verification workspace, and storage overhead. An estimate is advisory; handle write failures too.
+3. Stream the download into isolated staging storage with bounded memory. Report received bytes and percentage when known, support cancellation, and keep the current map and passport UI usable. V1 retries may restart cleanly; resumable downloads are not required. Interrupted/cancelled candidates never become installed, and abandoned staging is reclaimed on restart.
+4. Verify actual archive size and SHA-256 against the program manifest, validate PMTiles structure/header/metadata and schema/coverage/zoom compatibility, and verify each required resource's bytes, checksum, and style references. Hash incrementally or in bounded chunks; do not assume a whole-archive in-memory operation is viable on phones. Generation-time structure verification is separate from browser download integrity.
+5. Only after all bytes/resources are durably stored and verified, atomically commit the installed manifest/active-version pointer. Keep staging distinct from installed data. Reads must see a complete old or new version, never a mixture. Serialize competing installs/deletes across tabs and recover safely after a crash at each activation boundary.
+6. Confirm the activated package can be reopened through the local PMTiles reader before reporting Available offline. Invalidate reader caches by package version so bytes from different releases cannot mix. Failed activation restores the previous valid pointer; failed download or integrity checks discard/quarantine the candidate and retain the last known-good package.
+
+Core owns this lifecycle behind a testable storage contract covering staging writes, bounded range reads, existence/length checks, verification, atomic manifest activation, enumeration/recovery, and scoped deletion. The PMTiles JavaScript [Source interface](https://pmtiles.io/typedoc/interfaces/Source.html) supports local or remote byte retrieval through `getBytes` and an archive key; core must prove its chosen browser adapter against the pinned reader version. No tile server or browser-side SQLite layer is introduced.
+
+## 33.4 Storage capacity, persistence, and eviction
+
+Core must feature-detect and call `navigator.storage.estimate()` for usage/quota information and `navigator.storage.persist()` when the user requests an offline map, where available. Handle promise rejection, a false persistence result, and missing APIs explicitly. These APIs require a secure context; estimates are approximate and a persistence request is not guaranteed to succeed. See MDN's [estimate](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/estimate) and [persist](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist) documentation.
+
+Denied or unavailable persistence permits best-effort installation if writes work, with honest status. If storage itself is denied or unusable, report Download unavailable/failed and preserve core passport use to the extent its own storage is available. Never claim either map or user-data persistence that did not succeed.
+
+Recheck installed manifests, actual archive presence/length, required resources, and readable local bytes at startup, when returning to the app, before declaring readiness, and after read failures. Missing/truncated content or integrity failure invalidates availability; reconcile stale metadata and show download required. Do not silently use cached HTTP ranges as an installed package. Detect subsequent corruption through read/verification failures and provide clean redownload.
+
+Browser quotas and eviction operate at the origin level; program namespacing prevents accidental cross-program deletion but does not create independent quotas for Pages project paths. Best-effort data may be evicted; user clearing of browser data may remove persisted content too. The UI must not equate historical download success or persistence status with present bytes. See [MDN storage quotas and eviction](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria).
+
+The concrete binary storage mechanism remains a bounded core validation task in Section 70: prove bounded-memory writes, random byte reads, integrity checks, crash-safe activation, and realistic quota behavior on the target browsers before selecting and documenting the adapter. Keep passport IndexedDB records and attachments logically separate from replaceable map packages; never automatically delete them to satisfy map quota.
+
+## 33.5 Updates, rollback, cleanup, and deletion
+
+Basemap versions are independent of application/core and airport-data releases. Check the program-advertised release when fresh configuration is available online; offline checks use the last available manifest and must not assert that it is the latest release. Updates are explicit user actions, not automatic large background downloads. Install replacements using Section 33.3 while the old version remains usable. Insufficient space must fail the update safely; never delete the working version automatically to make an update fit.
+
+Retain the previous package through successful activation and local reopen. Only then may generic cleanup reclaim obsolete versions/resources that no active reader or retained manifest uses; record the retention policy and reclaimed bytes. If the previous version is retained, rollback verifies its resources and atomically reactivates it. Otherwise rollback requires a full verified download of the earlier published release. Do not promise offline rollback after its bytes have been reclaimed.
+
+Delete removes the selected program package's archive, staging data, installed/version metadata, and unreferenced package resources, including retained versions when deleting the entire offline map. Coordinate open readers/tabs, report deletion failures, and recheck actual presence. Shared shell resources remain while referenced. Never delete check-ins, notes, photos, preferences, or program datasets. After deletion, online range use may continue with accurate Not downloaded status; offline overlays and the list remain usable. Offer redownload.
+
+## 33.6 Reproducible generation and release
+
+Fly Washington owns a checked-in script or documented reproducible command and release record containing:
+
+- pinned Protomaps source build/version/date and source integrity reference;
+- pinned generation/extraction tools and compatible basemap/style schema versions;
+- explicit bounds/polygon, exact buffer, min/max zoom, and content policy;
+- exact generation commands and deterministic output metadata where practical, documenting any nondeterminism;
+- generated archive byte size and SHA-256, structural verification result, and resource manifest with sizes/checksums;
+- preserved OpenStreetMap/Protomaps attribution, source provenance, and applicable data, code, font, sprite, and style license notices;
+- measured hosting/browser validation results, immutable artifact URLs, release promotion steps, and rollback instructions.
+
+Use a pinned copy/extract of a [Protomaps basemap build](https://docs.protomaps.com/basemaps/downloads), not runtime hotlinks to its moving download channel. The [PMTiles CLI](https://docs.protomaps.com/pmtiles/cli) documents bounds/region extraction, zoom limits, and structural verification. Record any additional content-generation step; extracting a geographic/zoom subset is not itself arbitrary feature filtering.
+
+The Protomaps download documentation describes the basemap as an ODbL Produced Work; OpenStreetMap data licensing and attribution obligations still apply. Preserve visible OpenStreetMap contributor credit, Protomaps credit, and an ODbL notice/link offline as well as online. The app release owner must verify the exact transformed artifact and all bundled asset licenses, including any applicable derivative-database obligations; do not infer that a software license covers map data or fonts. See [OpenStreetMap copyright and attribution](https://www.openstreetmap.org/copyright).
+
+Choose the static artifact location after measuring size and checking host/repository limits (Section 61). Prefer generated deployment artifacts over normal source history for large binaries; `public/maps/<version>/washington.pmtiles` may be populated during the Pages build from an immutable verified release artifact. Committing a binary requires an intentional documented size/hosting decision. A release download location is not automatically a validated browser Range endpoint.
+
+Publish archive/resources before advertising their manifest. Verify the actual production URL's byte-range behavior and complete download, then promote the manifest. Keep prior immutable releases available for documented rollback; restore the earlier advertised manifest without altering passport data. App releases must preserve resources needed by compatible installed versions or explicitly offer a verified replacement before retiring compatibility.
+
+## 33.7 V1 exclusions and validation gates
+
+Do not add CARTO dependencies or tile prefetching, bulk downloads from public OpenStreetMap tile servers, MBTiles, a backend/proxy/tile server, delta updates, automatic large downloads, multiple selectable hosted providers, per-airport high-zoom coverage, or airport/passport data embedded in PMTiles. Public OSM tile offline/bulk fetching is prohibited by its [tile usage policy](https://operations.osmfoundation.org/policies/tiles/); OSM-derived downloadable data is the selected source instead.
+
+Section 70 must validate the actual Pages endpoint, storage mechanism, bounded-memory download/verification, local PMTiles reads, resource completeness, service-worker routing, and old/new coexistence under quota. If an assumption fails, stop the dependent migration step and revise this architecture explicitly; do not silently introduce an excluded workaround or weaken offline requirements.
 
 ---
 
@@ -1296,6 +1503,10 @@ The application should behave appropriately when:
 - opened as a normal browser tab;
 - installed as a PWA;
 - launched while offline.
+
+The app owns service-worker/build routing and core owns reusable package behavior. Precache the small shell and bundled program data independently; exclude the large PMTiles archive from mandatory installation precache. Online archive Range requests must reach the static host without an HTML navigation fallback or an incorrectly substituted partial cache entry. Complete installed-package reads use the local storage adapter, independently of opportunistic HTTP caches.
+
+Track locally required styles, sprites, glyphs, fonts, attribution, runtime workers, and their compatibility as specified in Section 33.2. Validate cold offline startup with all network access blocked after explicit installation. Worker updates/cache cleanup must preserve installed map resources and unfinished visit state; shell updates and map updates have distinct readiness and activation lifecycles.
 
 ---
 
@@ -1707,6 +1918,8 @@ Validation should detect at least:
 - invalid effective dates;
 - unsupported filter values.
 
+Validate the Section 17 map contract, effective styles, complete resource references, package versions, byte sizes, checksums, bounds/zoom, source/schema compatibility, and attribution/license notices. App CI must also verify generated map metadata against the published candidate, separately from airport-data generation.
+
 A broken program dataset should fail CI rather than deploy.
 
 ---
@@ -1730,6 +1943,8 @@ validateImport(...)
 
 These functions should be written so they can normally be tested without a browser.
 
+Add pure offline-package tests for configuration validation, opaque-version replacement/rollback detection, readiness transitions, progress calculations, and resource-manifest completeness. Use testable adapters for browser capabilities rather than requiring browser globals in domain tests.
+
 ---
 
 # 54. Persistence Tests
@@ -1747,6 +1962,8 @@ Persistence tests should verify:
 - restoration after reload.
 
 Browser integration tests may use a test implementation of IndexedDB.
+
+Map storage tests must exercise staged writes, cancellation/interruption, crash recovery, atomic install/update, checksum and truncated/missing-byte failures, quota/network failures, persistence granted/denied/unsupported/rejected cases, eviction reconciliation, deletion/redownload, and safe rollback. Assert that failed replacement leaves the last known-good version usable and that cleanup never removes passport data or resources referenced by an active package. Test doubles do not replace real browser storage validation with the measured archive.
 
 ---
 
@@ -1769,6 +1986,8 @@ program configuration can be loaded by @passport/core
 
 Where official airport/program counts are intentionally asserted, tests should make the expectation obvious so that an official program update results in a deliberate code/data change.
 
+Washington map-package fixtures must assert buffer/coverage, native zoom, immutable version metadata, measured bytes/checksum, compatible effective light/dark styles, and required local resources. Changing airport data must not require a basemap rebuild or change package identity.
+
 ---
 
 # 56. Core Integration Tests
@@ -1790,6 +2009,8 @@ attachment metadata → storage provider called
 
 program config → map derives expected marker state
 ```
+
+MapLibre integration coverage must verify program overlay sources/layers, selected-marker/label priority, style changes retaining overlays and state, installed-source byte reads, resource resolution, progress/cancellation UI, and missing-package recovery. Test that partial HTTP ranges cannot satisfy the installed-package readiness check and that failed updates keep the active source usable.
 
 ---
 
@@ -1814,6 +2035,8 @@ regional progress is correct
 
 Washington achievements evaluate correctly
 ```
+
+Use the actual Washington package contract with the newly packed core to verify local resources, appearance overrides, readiness UI, update compatibility, and independent airport/map release versions. The app owns service-worker integration tests covering archive requests, navigation fallback exclusions, resource retention during shell upgrades, and scoped package deletion.
 
 ---
 
@@ -1849,6 +2072,18 @@ outside allowed radius
 poor accuracy
 permission denied
 ```
+
+## 58.1 Map migration acceptance
+
+Fly Washington owns browser E2E coverage for every behavior in Section 16.2: initial and Show all matches fitting across viewport sizes, selection/deselection, pan/zoom preservation, mobile preview/details, map/list synchronization, filters, region/visited/selected styling, label identity/spacing/priority, responsive layouts, keyboard/focus/accessibility, light/dark/system appearance, and unfinished visit state. Rewrite renderer-specific assertions while preserving their product-level intent.
+
+Add package scenarios for progress/cancel/retry, failed integrity, network interruption, insufficient quota, persistence granted/denied/unavailable, atomic replacement and rollback, missing/evicted bytes/resources, delete/redownload, and app/worker update compatibility. Assert no passport-record or draft loss.
+
+Verify online PMTiles Range loading against the actual GitHub Pages production endpoint, full-package download, and cold offline launch with all network disabled and previously unviewed areas visible. Check labels, sprites, fonts, attribution, and both appearances offline. Separately test offline startup and core visits/filters/list/backup without a downloaded basemap, plus missing-package recovery. Mocked archives/resources support deterministic CI; they do not demonstrate real-host range behavior or mobile capacity.
+
+Record browser/OS versions and results on physical iPhone/iPad Safari and Android/Chromium where available, in browser tabs and installed PWA mode where supported. Validate measured archive download, rendering performance, memory/storage usage, restart, and update headroom. Unavailable physical-device coverage remains an explicit pending acceptance item, never an inferred pass.
+
+The historical WebKit internal-navigation-error exception in the status record is narrow: retain service-worker and cached-shell preconditions, skip only the identified error, and fail other errors/assertions. It does not waive first offline startup or establish Safari support. Record affected automation versions and complete physical-device verification before claiming target mobile acceptance.
 
 ---
 
@@ -1906,6 +2141,12 @@ Avoid architectural assumptions that require:
 
 Client-side routing, if used, must be configured so GitHub Pages navigation and PWA startup behave correctly.
 
+PMTiles online reads require correct HTTP Range responses from the selected static artifact URL. Protomaps lists GitHub Pages as a hosting option in its [static/cloud hosting guidance](https://docs.protomaps.com/pmtiles/cloud-storage), but the actual Washington artifact remains unvalidated. The app owner must test browser Range requests, `206` responses with matching `Content-Range` and requested bytes, complete downloads, correct content delivery without HTML fallbacks, base-path URLs, and CORS when resources use another origin. Test with and without service-worker control.
+
+Use the response semantics in [MDN HTTP Range requests](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Range_requests) for these checks; a host listing or response header alone is not acceptance evidence. Technical references in this map update were reviewed on 2026-09-12; actual artifact/browser experiments remain pending.
+
+Before choosing artifact placement, check current [GitHub Pages limits](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits) and [GitHub large-file limits](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github). Published Pages sites are currently limited to 1 GB and have a soft 100 GB/month bandwidth limit; account for shell/resources and retained releases, not just one archive. Reverify limits at implementation/release time. A sub-100 MB archive is an experimental preference, not proof that deployment, bandwidth, or Git storage is suitable. Keep GitHub Pages and static HTTP hosting; failures require explicit architectural review, not a proxy or backend workaround.
+
 ---
 
 # 62. Core Release Strategy
@@ -1929,6 +2170,8 @@ Until the architecture stabilizes, releases below `1.0.0` may change more rapidl
 
 Program applications should pin or constrain versions deliberately.
 
+Package the MapLibre/offline-contract core change first, then update the app's explicit tarball dependency and lockfile using Section 6. Document breaking raster-map fields, style migration, and retired provider preferences. Basemap artifact versions and rollback remain independent (Section 33.5); do not couple a new airport dataset to a map rebuild.
+
 ---
 
 # 63. Public Core API
@@ -1945,6 +2188,8 @@ export {
 
 export type {
     PassportProgram,
+    MapConfig,
+    OfflineMapPackage,
     AirportDefinition,
     RegionDefinition,
     CheckIn,
@@ -2003,11 +2248,13 @@ Requirements include:
 
 Accessibility should be included during component implementation, not treated solely as final polish.
 
+MapLibre canvas layers must preserve equivalent accessible airport selection through core controls and the synchronized list; canvas rendering alone is not an accessible replacement for existing marker names/actions. Offline status/actions must be perceivable and operable without color or pointer input (Sections 16.2 and 32.2).
+
 ---
 
 # 66. Performance
 
-The target dataset is small enough that premature optimization is unnecessary.
+The airport dataset is small enough that premature optimization is unnecessary. The basemap archive has a separate measured storage, memory, and download budget.
 
 However, the architecture should avoid obvious inefficient patterns.
 
@@ -2019,6 +2266,8 @@ Requirements:
 - images should be resized asynchronously;
 - initial bundle size should be monitored;
 - airport data should not require network round trips after installation.
+
+Measure the z9–z13 candidates on target mobile hardware. Keep archive downloading, hashing, and local range reads bounded in memory; do not load the whole archive into JavaScript memory. Initial PWA precache must stay independent of the explicit map download. Choose shipping detail based on measured orientation quality, performance, and reliable installation/update behavior (Section 70).
 
 ---
 
@@ -2045,6 +2294,8 @@ Developer-facing logging should retain enough context to debug failures while av
 ---
 
 # 68. First Vertical Slice
+
+**Historical foundation plan:** this slice now exists, and the full captured Washington roster is integrated. The original scope below is retained as implementation history, not an instruction to shrink the dataset or recreate the repositories. Remaining feature gaps are recorded in the status section; map migration follows Section 70.
 
 Do **not** begin by loading every real Fly Washington airport and implementing every planned feature simultaneously.
 
@@ -2120,6 +2371,47 @@ The Oregon test application is an architectural canary, not a distraction from W
 ---
 
 # 70. Recommended Implementation Phases
+
+Phases 0–9 below retain the original roadmap and exit criteria. Repository setup, the map/passport slice, basic filters, notes/JSON transfer, and the full captured roster are already implemented to the extent described in the status record; GPS, photos/ZIP, dated awards, advanced filters, achievements, and Oregon remain future work. Do not treat these phases as a blank-repository starting point or claim remote/device checks passed merely because tooling exists.
+
+## Migration Phase M0 — Measure Washington Map Candidates
+
+This approved migration begins before locking a production package. Fly Washington owns generation and the decision record; core owns the renderer/storage proof needed to evaluate candidates.
+
+1. Pin a Protomaps build and extraction/tool versions. Record Washington's exact bounds/polygon and a chosen 25–50 mile buffer including border/coastal areas. Keep source, min zoom (initially 0), buffer, content policy, and styling comparable between candidates.
+2. Generate PMTiles archives at maximum native zooms **9, 10, 11, 12, and 13**. Check in the reproducible script/commands and record source/build date, bounds, min/max zoom, exact archive bytes, resource bytes, checksums, and generation commands for each. Apply/record the Section 33.1 reduction policy consistently; distinguish extraction from any additional content filtering.
+3. Compare statewide orientation and representative coastal, border, urban, rural, mountain, and seaplane airports, including label legibility, useful roads/towns, buffering, and detail when zoomed beyond native resolution. Program airports remain separate overlays in every comparison.
+4. Measure mobile rendering performance and memory, real Pages Range responses, full-package download with bounded memory, local random reads, offline reload including all styles/sprites/glyphs/fonts/attribution, storage usage, and old/new coexistence during a failed update. Use the real candidate archive, not only a tiny fixture.
+5. Select the lowest-detail uniform statewide package that meets those product needs. Start evaluation at z12; z11 or z12 is an expected likely result, not predetermined. Prefer an initial archive under 100 MB, but usefulness and measured browser behavior decide. Record separate archive, resource, installation, and update-space totals. No package size has been measured in this documentation task.
+6. Record the chosen source/detail/buffer/content policy and measured acceptance evidence in the app's map-package decision record, with unresolved device coverage explicit. Uniform coverage is V1; higher zoom only around airports is a V2 optimization requiring a documented change if uniform coverage proves too large.
+
+The core implementation owner must select and document the browser storage adapter only after demonstrating staged bounded-memory writes, incremental integrity checks, local PMTiles reads, crash-safe activation, persistence capability handling, and realistic update quota on target browsers. The app owner must validate the actual static endpoint and service-worker/resource routing. Failed assumptions block the dependent migration step until this plan is explicitly revised; they do not reopen MapLibre/PMTiles as an unbounded library comparison.
+
+## Migration Phase M1 — Contracts, Rendering, and Offline Lifecycle
+
+1. Core: introduce the Section 17 typed package/style contract, schema validation, and Section 33 storage abstractions based on M0 evidence.
+2. Core: add MapLibre plus PMTiles integration and local default styles; preserve all dynamic overlays and product behaviors in Section 16.2. Add regression coverage while adapting renderer internals.
+3. Core: implement explicit download/status/cancel/retry/update/delete UI, persistence/estimate handling, real availability checks, integrity verification, atomic activation, rollback, and cleanup. Validate full resource completeness.
+4. Fly Washington: configure and publish the chosen versioned Washington package/resources and reproducible generation/release metadata; integrate app-shell routing and offline readiness.
+5. Cross-repository: version and package the changed core after its checks, then update the app dependency, checked-in core tarball, and lockfile with `npm run core:pack`. Migrate Fly Washington from Leaflet/CARTO to the approved PMTiles config; CI must consume the packaged core independently.
+6. Both repositories: complete unit/integration/E2E checks, real Pages and physical-device validation, and contract/development documentation. Record any narrow automated-browser limitation without reducing offline acceptance requirements.
+7. Only after migration tests pass: remove obsolete Leaflet/CARTO dependencies, secrets, raster configuration, test intercepts, provider preferences, and setup instructions. Record the final implemented status separately from these approved requirements.
+
+Exit criteria:
+
+```text
+measured Washington package and reproducible release record
+    ↓
+tested packaged core consumed by Fly Washington
+    ↓
+same PMTiles basemap online and fully offline after explicit installation
+    ↓
+honest readiness and safe failure/update/delete behavior
+    ↓
+existing airport/passport/appearance/accessibility behavior preserved
+```
+
+Migration phases are the next map work; the original numbered roadmap follows for historical context and remaining non-map features.
 
 ## Phase 0 — Repository Foundation
 
@@ -2325,13 +2617,19 @@ Static hosting: GitHub Pages
 Primary local structured storage: IndexedDB
 Application form: PWA
 Automated browser testing: Playwright or equivalent
+Map renderer (approved migration): MapLibre GL JS
+Basemap archive: PMTiles
+Basemap source: OpenStreetMap-derived Protomaps basemap
+Basemap hosting: static HTTP compatible with GitHub Pages and Range requests
+Offline package storage: browser-managed persistent-capable storage behind a core abstraction
 ```
 
-The following remain implementation choices and should be selected deliberately:
+Current implementation uses TypeScript/DOM components, Leaflet, IndexedDB via idb, Vitest, and Playwright. Leaflet/CARTO is the current system being migrated, not an open target choice. Map library selection is settled. The exact map storage adapter has the bounded M0 validation task and owner above; MBTiles/browser SQLite is outside this architecture.
+
+The original general library choices below remain areas for deliberate selection or evolution as needed; existing selections should not be reopened without a concrete requirement:
 
 ```text
 frontend framework
-map library
 IndexedDB wrapper
 test runner
 CSS/UI approach
@@ -2406,6 +2704,10 @@ Agents must not introduce a backend dependency for functionality that can be pro
 
 Agents must not replace local-first behavior with cloud-only functionality.
 
+For offline maps, follow the approved MapLibre/PMTiles design and Migration Phases M0/M1. Preserve current product semantics and independent airport/passport data. Keep Washington artifacts/policy in the app and generic renderer, storage lifecycle, status UI, and defaults in core. Do not substitute CARTO caching, public OpenStreetMap tile downloads, MBTiles, or a backend. Verify primary documentation for pinned APIs, asset/data licenses, browser support, and host limits; label expectations and experiments honestly.
+
+Before declaring completion, prove local availability of the archive and every style/sprite/glyph/font/attribution resource, failed-update safety, eviction recovery, and the Section 58 behavior regressions. Update the public contract and consuming core tarball workflow. If an M0 assumption fails, stop the dependent work and document the architectural revision rather than adding an undocumented workaround. Do not remove current Leaflet/CARTO setup until migration tests pass.
+
 ---
 
 # 74. Architectural Review Questions
@@ -2459,6 +2761,26 @@ Is this semantic behavior or program-specific visual representation?
 
 These questions should be used in code review as well as implementation planning.
 
+### Offline-map acceptance
+
+```text
+Does MapLibre render the same program-owned Protomaps PMTiles basemap online/offline?
+Are rendering/lifecycle/defaults in core and Washington artifacts/policy/releases in the app?
+Are program airports, regions, stamps, visits, and marker state separate from PMTiles?
+Which complete archive/resources must the user download, and how is presence checked now?
+Are shell, program data, user data, basemap, and persistence statuses independently accurate?
+What happens on denied/full storage, interruption, corrupt bytes, eviction, and deletion?
+Does a failed replacement keep the last known-good map and all passport data usable?
+How are immutable map versions promoted/rolled back independently of core/airport data?
+Where are the measured z9–z13 results, reproducible commands, and shipping-detail decision?
+Are all Section 16.2 map behaviors and unfinished visits preserved?
+Have actual Pages Range loading and complete cold offline startup been validated?
+Which physical iPhone/iPad Safari and Android/Chromium results or pending checks exist?
+Can the app build/test from the versioned core tarball without a sibling checkout?
+```
+
+Answers are specified in Sections 4, 6, 16–17, 32–34, 53–58, 61–62, and 70. An unresolved implementation choice requires a bounded validation task and named repository owner; it cannot substitute for these acceptance requirements.
+
 ---
 
 # 75. Explicit Non-Goals for Initial Development
@@ -2481,6 +2803,8 @@ The following are not required for the initial product:
 - combining all passport programs into one user-facing super-app.
 
 Avoid building infrastructure for these until there is a concrete requirement.
+
+The initial map migration also excludes the approaches listed in Section 33.7. In particular, no hosted-provider comparison/selector, per-airport high-zoom optimization, automatic large download, or delta-update infrastructure is required.
 
 ---
 
@@ -2529,85 +2853,44 @@ The following rules should remain easy to find because violating one generally i
 18. **CI must pass before release/deployment.**
 19. **Oregon should be used early to expose accidental Washington-specific design.**
 20. **Do not generalize one-off behavior until a reusable pattern actually exists.**
+21. **MapLibre GL JS and an OSM-derived Protomaps PMTiles basemap are the approved target; Leaflet/CARTO describes the current system to migrate.**
+22. **The same versioned basemap and effective local styles serve online and offline use.**
+23. **Core owns generic map rendering/storage/lifecycle/status/defaults; programs own coverage, artifacts, versions, generation/releases, and visual overrides.**
+24. **Airports, passport regions, stamps, visits, and marker state stay outside PMTiles.**
+25. **Offline map availability requires complete verified bytes and all local rendering resources, not cached ranges or a historical download flag.**
+26. **Large map downloads/updates are explicit user actions, independent of small shell/program precaching.**
+27. **A failed update must retain the working map; map cleanup/deletion must never erase passport data.**
+28. **Persistence requests, storage denial/quota, corruption, and eviction receive honest actionable states.**
+29. **Basemap versions are independent of app/core and airport-data versions, with reproducible release/rollback records.**
+30. **No backend, tile server, CARTO requirement, public OSM bulk tile download, or MBTiles solution is introduced.**
+31. **Shipping detail/size requires the z9–z13 experiment; z11/z12 and under 100 MB are unmeasured expectations.**
+32. **Renderer migration preserves selection, fitting, overlays, labels, filters, map/list behavior, responsive accessibility, appearance, and unfinished visits.**
 
 ---
 
 # 78. Immediate Next Steps
 
-Implementation can begin with the repositories that now exist.
+Continue from core 0.4.5 and the full integrated Washington roster. The initial foundation instructions formerly here are preserved by Sections 68 and 70's original phases; do not recreate the repositories or reduce the dataset. The approved map migration remains unimplemented.
 
 ## `core-passport`
 
-Create the initial foundation:
-
-```text
-TypeScript/package setup
-src/models
-src/app
-src/map
-src/persistence
-tests
-CI
-public package API
-```
-
-Implement the initial models for:
-
-```text
-PassportProgram
-RegionDefinition
-AirportDefinition
-StampLocationDefinition
-CheckIn
-```
-
-Implement only enough application behavior to render a small program configuration.
+1. Support the M0 experiment with MapLibre/PMTiles and bounded-memory local storage/read/verification proofs. Record adapter/browser results and resolve the explicit gates in Section 33.7.
+2. Introduce the typed map-package/resource contract and reusable storage/lifecycle modules; implement renderer migration with the Section 16.2 regression requirements.
+3. Add accessible readiness/download/update/delete UI, persistence requests, eviction detection, integrity verification, and atomic update/rollback behavior.
+4. Run relevant core checks and package the changed version before Fly Washington consumes it; document new exports, raster-contract migration, and compatibility.
 
 ## `fly-washington`
 
-Create:
+1. First generate the five z9–z13 Washington candidates with a documented 25–50 mile buffer and pinned source; record measured size/quality/browser results and choose shipping detail through M0.
+2. Document reproducible generation, resource/license manifest, static artifact placement, release promotion, and rollback. Validate the actual Pages endpoint and full local installation; retain pending physical-device acceptance explicitly.
+3. Update the core dependency and checked-in tarball/lockfile with `npm run core:pack`; configure the Washington package and visual overrides in `src/program/map.ts` while keeping airport/region JSON separate.
+4. Integrate small-shell PWA routing with package/resource availability and run app validation, build, integration, and E2E checks. Complete migration before removing obsolete CARTO/Leaflet configuration, secrets, and tests.
 
-```text
-src/program/program.ts
-src/program/regions.ts
-src/program/airports.ts
-src/program/stamp-locations.ts
-src/main.ts
-tests/program
-tests/integration
-```
+## Directly affected documentation follow-up
 
-Begin with:
+This edit changes only `Planning.md`. During the implementation milestones, core must update `passport-core/README.md` and public contract documentation for the new API, resources, storage lifecycle, and package workflow. The app must update `fly-washington/README.md` and `fly-washington/docs/DEVELOPMENT.md` for map setup, offline/PWA behavior, browser evidence, and release/rollback commands; update `docs/DATA-SOURCES.md` with map provenance or link a dedicated map-package record. Retire `.env.example`/CI CARTO setup instructions and secret references only after migration tests pass. Existing documentation describes the current Leaflet/CARTO system until then.
 
-```text
-2 regions
-3–5 airports
-at least one airport with multiple stamp locations
-```
-
-Do not yet enter the complete Washington dataset.
-
-The first milestone is complete when the application can:
-
-```text
-load Fly Washington configuration
-        ↓
-render airports on the map
-        ↓
-select an airport
-        ↓
-open airport details
-        ↓
-create a local check-in
-        ↓
-persist it
-        ↓
-show the airport as visited
-        ↓
-update progress
-```
-
-At that point, the architectural foundation has been validated sufficiently to expand functionality and data.
+Keep unrelated roadmap work visible: dated award eligibility, precise stamp targets and missing metadata, GPS, richer filters, photos/ZIP backup, achievements, Oregon validation, registry publication, and pending deployment/device acceptance remain as recorded. The renderer migration must not silently implement, remove, or redefine those requirements.
 
 ---
 
