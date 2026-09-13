@@ -1,3 +1,4 @@
+import type { OfflineMapPackage } from './map/contracts.js';
 export interface Coordinates { latitude: number; longitude: number }
 export type CompletionRule = { type: 'all' } | { type: 'count'; required: number } | { type: 'percentage'; required: number };
 export interface RegionDefinition { id: string; name: string; color: string; completion: CompletionRule }
@@ -17,16 +18,11 @@ export interface AirportDefinition {
   description: string;
   stampLocations?: StampLocationDefinition[];
 }
-export interface MapStyleDefinition {
-  id: string; name: string; tileUrl: string; attribution: string;
-  /** Optional native dark tiles, selected by the application's appearance setting. */
-  darkTileUrl?: string;
-}
 export interface PassportProgram {
   id: string; name: string; shortName: string; description: string;
   dataNotice: string;
   branding: { accent: string; eyebrow: string };
-  map: { center: Coordinates; zoom: number; tileUrl: string; attribution: string; markerDetailZoom?: number; styles?: MapStyleDefinition[] };
+  map: { center: Coordinates; zoom: number; package: OfflineMapPackage; markerDetailZoom?: number };
   regions: RegionDefinition[]; airports: AirportDefinition[];
 }
 export interface CheckIn {

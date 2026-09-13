@@ -1,7 +1,10 @@
 # Aviation Passport Platform
+
+> Implementation update (2026-09-12, unpublished working tree): core 0.5.0 and the consuming app now contain the MapLibre/PMTiles renderer and verified offline-package lifecycle described below. See [core API/storage documentation](docs/OFFLINE-MAPS.md) and the app's `docs/OFFLINE-MAPS.md` for measured package sizes, validation, and remaining release gates. The Leaflet/CARTO release record below describes the pre-migration released baseline. Washington z12 is the implementation candidate; actual package endpoint deployment and physical-device acceptance are still pending. No commit, push, or deployment is implied by this status.
+
 ## Architecture, Requirements, and Implementation Plan
 
-**Status:** Current implementation: Leaflet/CARTO with the full Washington roster. Approved target: MapLibre GL JS/PMTiles offline maps; migration and validation pending (2026-09-12).
+**Status:** Unpublished core 0.5.0 implements MapLibre GL JS/PMTiles offline maps with the full Washington roster in the app. Local automated validation is recorded in the implementation documents; deployed-package and physical-device acceptance remain pending (2026-09-12). Core 0.4.5 is the historical Leaflet/CARTO released baseline.
 
 **Primary repositories:** `passport-core` (called `core-passport` below), `fly-washington`
 
@@ -13,11 +16,11 @@ MapLibre GL JS will replace Leaflet. A program-owned, self-hosted PMTiles archiv
 
 The shared core owns rendering, PMTiles integration, package contracts, storage abstractions, lifecycle, readiness UI, and default styling. Fly Washington owns the Washington extract, coverage, independent map versions, generation/release process, and visual overrides. Airport/passport data and user visits remain separate from the basemap.
 
-This is approved future work, not an implemented feature. MapLibre rendering, verified downloads, persistence requests, and offline-map status UI do not yet exist. Sections 16–17 and 32–34 define the target; Section 70 adds the migration sequence and required z9–z13 experiment. z12 is a starting experimental target; z11/z12 and an archive under 100 MB are expectations pending measurement, not measured results or shipping commitments.
+The unpublished implementation now includes MapLibre rendering, verified downloads, persistence requests, and offline-map status UI. Sections 16–17 and 32–34 remain the architectural requirements; Section 70 records the migration sequence. The required z9–z13 experiment produced measured archive sizes of 9,237,767; 18,741,196; 36,902,403; 81,779,500; and 191,831,101 bytes respectively. Z12 is the implementation candidate, with 11,230,824 additional resource bytes. These measurements supersede the original z11/z12 and sub-100 MB expectations, without resolving physical-device or deployment gates. The app's map release record contains provenance, commands, comparison evidence, and remaining acceptance work.
 
-## Current implementation and historical release record
+## Historical pre-migration release record
 
-The following release notes describe the existing Leaflet system and its history. Their renderer/provider details are superseded by the approved target above; their product behavior must survive migration.
+The following release notes describe the released Leaflet system before the unpublished 0.5.0 migration. Their renderer/provider details are historical; their product behavior remains required.
 
 Core 0.4.2: approved legend uses equal-sized hollow/filled CSS circles inside the existing rounded box; Export/Import controls share typography, sizing, and alignment. Single-provider map errors no longer suggest switching styles. At this milestone, Fly Washington switched to CARTO only, with its existing key and native light/dark appearance. The implemented core retains program-configured raster-provider support.
 
@@ -27,7 +30,7 @@ Core 0.4.4: airport cards, map labels, accessible marker names, and detail headi
 
 Core 0.4.5: mobile marker taps open a compact airport preview with name, visit status, region, and an explicit View details action. List selections and desktop selections open details directly. Mobile hides zoom buttons and uses 1.5px marker/legend outlines; desktop uses 3px. General labels appear together for visible airports when spacing permits from two zoom levels earlier; crowded views suppress general labels while preserving the selected label. Panning recomputes label visibility.
 
-## Implementation status — 2026-09-06
+## Historical implementation status — 2026-09-06
 
 Approved map update (core 0.4.1): the initial map fits participating airport bounds to the measured viewport with marker/control padding and quarter-step zoom precision. Show all matches uses the same fitting logic; subsequent navigation is preserved. Map visits use hollow/filled region-colored circles without airplane/checkmark glyphs, retaining selected outlines and accessible visited labels. Browser coverage checks initial marker visibility across desktop/mobile sizes and visited appearance. Physical mobile acceptance follows deployment.
 
@@ -2382,7 +2385,7 @@ This approved migration begins before locking a production package. Fly Washingt
 2. Generate PMTiles archives at maximum native zooms **9, 10, 11, 12, and 13**. Check in the reproducible script/commands and record source/build date, bounds, min/max zoom, exact archive bytes, resource bytes, checksums, and generation commands for each. Apply/record the Section 33.1 reduction policy consistently; distinguish extraction from any additional content filtering.
 3. Compare statewide orientation and representative coastal, border, urban, rural, mountain, and seaplane airports, including label legibility, useful roads/towns, buffering, and detail when zoomed beyond native resolution. Program airports remain separate overlays in every comparison.
 4. Measure mobile rendering performance and memory, real Pages Range responses, full-package download with bounded memory, local random reads, offline reload including all styles/sprites/glyphs/fonts/attribution, storage usage, and old/new coexistence during a failed update. Use the real candidate archive, not only a tiny fixture.
-5. Select the lowest-detail uniform statewide package that meets those product needs. Start evaluation at z12; z11 or z12 is an expected likely result, not predetermined. Prefer an initial archive under 100 MB, but usefulness and measured browser behavior decide. Record separate archive, resource, installation, and update-space totals. No package size has been measured in this documentation task.
+5. Select the lowest-detail uniform statewide package that meets those product needs. Start evaluation at z12; z11 or z12 is an expected likely result, not predetermined. Prefer an initial archive under 100 MB, but usefulness and measured browser behavior decide. Record separate archive, resource, installation, and update-space totals. The original planning edit contained expectations only; the implementation status and app release record now contain measured candidate sizes.
 6. Record the chosen source/detail/buffer/content policy and measured acceptance evidence in the app's map-package decision record, with unresolved device coverage explicit. Uniform coverage is V1; higher zoom only around airports is a V2 optimization requiring a documented change if uniform coverage proves too large.
 
 The core implementation owner must select and document the browser storage adapter only after demonstrating staged bounded-memory writes, incremental integrity checks, local PMTiles reads, crash-safe activation, persistence capability handling, and realistic update quota on target browsers. The app owner must validate the actual static endpoint and service-worker/resource routing. Failed assumptions block the dependent migration step until this plan is explicitly revised; they do not reopen MapLibre/PMTiles as an unbounded library comparison.
@@ -2411,7 +2414,7 @@ honest readiness and safe failure/update/delete behavior
 existing airport/passport/appearance/accessibility behavior preserved
 ```
 
-Migration phases are the next map work; the original numbered roadmap follows for historical context and remaining non-map features.
+Migration phases record the map implementation and its remaining release gates; the original numbered roadmap follows for historical context and remaining non-map features.
 
 ## Phase 0 — Repository Foundation
 
@@ -2624,7 +2627,7 @@ Basemap hosting: static HTTP compatible with GitHub Pages and Range requests
 Offline package storage: browser-managed persistent-capable storage behind a core abstraction
 ```
 
-Current implementation uses TypeScript/DOM components, Leaflet, IndexedDB via idb, Vitest, and Playwright. Leaflet/CARTO is the current system being migrated, not an open target choice. Map library selection is settled. The exact map storage adapter has the bounded M0 validation task and owner above; MBTiles/browser SQLite is outside this architecture.
+The unpublished implementation uses TypeScript/DOM components, MapLibre GL JS, PMTiles, chunked IndexedDB via idb, Vitest, and Playwright. Leaflet/CARTO describes the historical released system. Map library selection is settled. The IndexedDB adapter has standalone lifecycle and browser coverage; physical-device storage/memory validation remains an M0 acceptance gate. MBTiles/browser SQLite is outside this architecture.
 
 The original general library choices below remain areas for deliberate selection or evolution as needed; existing selections should not be reopened without a concrete requirement:
 
@@ -2870,25 +2873,25 @@ The following rules should remain easy to find because violating one generally i
 
 # 78. Immediate Next Steps
 
-Continue from core 0.4.5 and the full integrated Washington roster. The initial foundation instructions formerly here are preserved by Sections 68 and 70's original phases; do not recreate the repositories or reduce the dataset. The approved map migration remains unimplemented.
+Continue from the unpublished core 0.5.0 implementation and the full integrated Washington roster. The initial foundation instructions formerly here are preserved by Sections 68 and 70's original phases; do not recreate the repositories or reduce the dataset. Rendering, package lifecycle, integration, and reproducible map preparation are implemented; release acceptance is incomplete.
 
 ## `core-passport`
 
-1. Support the M0 experiment with MapLibre/PMTiles and bounded-memory local storage/read/verification proofs. Record adapter/browser results and resolve the explicit gates in Section 33.7.
-2. Introduce the typed map-package/resource contract and reusable storage/lifecycle modules; implement renderer migration with the Section 16.2 regression requirements.
-3. Add accessible readiness/download/update/delete UI, persistence requests, eviction detection, integrity verification, and atomic update/rollback behavior.
-4. Run relevant core checks and package the changed version before Fly Washington consumes it; document new exports, raster-contract migration, and compatibility.
+1. Complete physical-device storage, memory, and cold-start acceptance for the implemented IndexedDB adapter against Section 33.7.
+2. Maintain the typed package/resource contract, renderer, lifecycle, and Section 16.2 behavior independently of program repositories.
+3. Preserve standalone synthetic-fixture tests for readiness, download failure/cancellation, verification, eviction, rollback, deletion, and visit/draft isolation.
+4. Rebuild and explicitly refresh the consuming tarball after core changes; public exports and raster-contract migration are documented in `docs/OFFLINE-MAPS.md`.
 
 ## `fly-washington`
 
-1. First generate the five z9–z13 Washington candidates with a documented 25–50 mile buffer and pinned source; record measured size/quality/browser results and choose shipping detail through M0.
-2. Document reproducible generation, resource/license manifest, static artifact placement, release promotion, and rollback. Validate the actual Pages endpoint and full local installation; retain pending physical-device acceptance explicitly.
-3. Update the core dependency and checked-in tarball/lockfile with `npm run core:pack`; configure the Washington package and visual overrides in `src/program/map.ts` while keeping airport/region JSON separate.
-4. Integrate small-shell PWA routing with package/resource availability and run app validation, build, integration, and E2E checks. Complete migration before removing obsolete CARTO/Leaflet configuration, secrets, and tests.
+1. Review the measured z9–z13 comparison on physical iPhone/Android devices before promoting the z12 candidate. Pinned generation, coverage buffer, byte counts, hashes, and browser diagnostics are recorded in `maps/` and `docs/OFFLINE-MAPS.md`.
+2. Retain the complete immutable map release durably and configure its archive source for reproducible builds. After authorized publication, validate the actual Pages archive Range responses and every resource; the unpublished package endpoint currently returns 404.
+3. Keep consuming the versioned core tarball without requiring a sibling checkout. Keep Washington package metadata, generation/release scripts, coverage, and airport/region data in this repository.
+4. Complete physical Safari cold-start acceptance and a remote CI run. Automated Chromium cold startup passes; automated WebKit open-app offline rendering passes but its narrowly identified internal cold-navigation error remains unresolved.
 
 ## Directly affected documentation follow-up
 
-This edit changes only `Planning.md`. During the implementation milestones, core must update `passport-core/README.md` and public contract documentation for the new API, resources, storage lifecycle, and package workflow. The app must update `fly-washington/README.md` and `fly-washington/docs/DEVELOPMENT.md` for map setup, offline/PWA behavior, browser evidence, and release/rollback commands; update `docs/DATA-SOURCES.md` with map provenance or link a dedicated map-package record. Retire `.env.example`/CI CARTO setup instructions and secret references only after migration tests pass. Existing documentation describes the current Leaflet/CARTO system until then.
+Core/app READMEs, public API documentation, development and data-source notes, and dedicated offline-map records now describe the unpublished implementation, generation commands, evidence, and release gates. Leaflet dependencies and application CARTO environment/CI references have been retired after local renderer migration checks; historical release information is retained. Keep these documents current as remaining release acceptance proceeds. No production deployment, commit, or push is implied by this implementation record.
 
 Keep unrelated roadmap work visible: dated award eligibility, precise stamp targets and missing metadata, GPS, richer filters, photos/ZIP backup, achievements, Oregon validation, registry publication, and pending deployment/device acceptance remain as recorded. The renderer migration must not silently implement, remove, or redefine those requirements.
 

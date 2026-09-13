@@ -1,0 +1,15 @@
+import 'maplibre-gl/dist/maplibre-gl.css';
+import '../../src/styles.css';
+import { PassportMap } from '../../src/map/renderer.js';
+import { OfflineMapManager, browserMapEnvironment } from '../../src/map/offline/manager.js';
+import { IndexedMapStorage } from '../../src/map/offline/storage.js';
+const manifest = new URLSearchParams(location.search).get('manifest') || '/fixture/manifest.json';
+const p = await fetch(manifest).then(r=>r.json());
+const manager = new OfflineMapManager('independent-browser-fixture',p,new IndexedMapStorage('independent-browser-fixture',p.id),browserMapEnvironment());
+const map = await PassportMap.create(document.querySelector('#map')!,[47.3,-120.7],6,manager,()=>{},console.error);
+manager.subscribe(status=>{document.querySelector('#status')!.textContent=JSON.stringify(status);void map.basemap('light')});
+await manager.check();
+document.querySelector('#download')!.addEventListener('click',()=>void manager.download());
+document.querySelector('#delete')!.addEventListener('click',()=>void manager.delete());
+document.querySelector('#dark')!.addEventListener('click',()=>void map.basemap('dark'));
+Object.assign(window, { testMap: map, testManager: manager });

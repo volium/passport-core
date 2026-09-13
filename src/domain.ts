@@ -1,3 +1,4 @@
+import { validateMapPackage } from './map/contracts.js';
 import type { AirportFilters, CheckIn, Coordinates, PassportBackup, PassportProgram } from './models.js';
 
 export function validateProgram(program: PassportProgram): void {
@@ -12,16 +13,7 @@ export function validateProgram(program: PassportProgram): void {
   unique(program.airports.map(a => a.id), 'airport');
   unique(program.airports.flatMap(a => a.stampLocations?.map(s => s.id) ?? []), 'stamp');
   coordinate(program.map.center);
-  if (program.map.styles) {
-    if (!program.map.styles.length) throw new Error('At least one map style is required');
-    unique(program.map.styles.map(s => s.id), 'map style');
-    for (const style of program.map.styles) {
-      if (!style.name.trim() || !style.attribution.trim()) throw new Error('Map styles need a name and attribution');
-      for (const url of [style.tileUrl, ...(style.darkTileUrl === undefined ? [] : [style.darkTileUrl])]) {
-        if (!/^https?:\/\//.test(url) || !['{z}', '{x}', '{y}'].every(token => url.includes(token))) throw new Error('Invalid map style tile URL');
-      }
-    }
-  }
+  validateMapPackage(program.map.package);
   for (const region of program.regions) {
     const rule = region.completion;
     if (!/^#[0-9a-f]{6}$/i.test(region.color)) throw new Error('Region color must be a six-digit hex value');

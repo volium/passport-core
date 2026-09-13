@@ -2,3 +2,6 @@ node_modules/
 dist/
 coverage/
 *.tgz
+src/map/worker.js
+src/notices.txt
+test-results/

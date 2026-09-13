@@ -1,12 +1,13 @@
 {
   "name": "@passport/core",
-  "version": "0.4.5",
+  "version": "0.5.0",
   "description": "Local-first, program-independent aviation passports",
   "type": "module",
   "license": "MIT",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "docs"
   ],
   "exports": {
     ".": {
@@ -16,22 +17,29 @@
     "./styles.css": "./dist/styles.css"
   },
   "scripts": {
-    "build": "tsc && node scripts/copy-css.mjs",
+    "build": "node scripts/build-worker.mjs && tsc && node scripts/copy-css.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests",
-    "test": "vitest run",
-    "prepack": "npm run build"
+    "test": "vitest run tests/core.test.ts tests/offline.test.ts",
+    "prepack": "npm run build",
+    "test:browser": "playwright test"
   },
   "dependencies": {
+    "@maplibre/maplibre-gl-style-spec": "26.4.2",
+    "@protomaps/basemaps": "5.7.2",
+    "hash-wasm": "4.12.0",
     "idb": "8.0.3",
-    "leaflet": "1.9.4"
+    "maplibre-gl": "6.9.0",
+    "pmtiles": "4.5.0"
   },
   "devDependencies": {
-    "@types/leaflet": "1.9.20",
-    "typescript": "~5.9.2",
-    "vitest": "^3.2.4",
-    "fake-indexeddb": "^6.2.2",
+    "@playwright/test": "1.55.0",
+    "esbuild": "0.28.2",
     "eslint": "^9.35.0",
-    "typescript-eslint": "^8.42.0"
+    "fake-indexeddb": "^6.2.2",
+    "typescript": "~5.9.2",
+    "typescript-eslint": "^8.42.0",
+    "vite": "7.3.6",
+    "vitest": "^3.2.4"
   }
 }

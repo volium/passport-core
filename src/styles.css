@@ -1,4 +1,4 @@
-@import 'leaflet/dist/leaflet.css';
+@import 'maplibre-gl/dist/maplibre-gl.css';
 
 :root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #203b38; background: #f5f6f1; font-synthesis: none; --surface: #fff; --background: #f5f6f1; --text: #203b38; --muted: #62736d; --border: #dce3dc; --soft: #edf2eb; --accent: #256b53; --shadow: 0 8px 30px #163e3110; color-scheme: light; }
 :root[data-theme='dark'] { --surface: #1b2927; --background: #111d1b; --text: #e4eee8; --muted: #abc0b7; --border: #374b44; --soft: #263b32; --accent: #88c9a8; --shadow: 0 8px 30px #0003; color: var(--text); background: var(--background); color-scheme: dark; }
@@ -56,9 +56,6 @@ progress::-moz-progress-bar { background: var(--region, #438262); }
 .airport-name small { display: block; font-size: 11px; color: var(--muted); margin-top: 5px; }
 .visit-state { font-size: 20px; }
 .map-section { position: relative; min-width: 0; }
-.map-style-control { position: absolute; top: 12px; left: 12px; z-index: 500; padding: 8px 10px; border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); }
-.map-style-control label { display: flex; align-items: center; gap: 8px; }
-.map-style-control select { width: auto; max-width: 160px; margin: 0; }
 #map { position: absolute; inset: 0; background: #dfe7df; }
 .map-caption { position: absolute; bottom: 24px; left: 16px; right: 16px; z-index: 500; display: flex; align-items: center; justify-content: space-between; pointer-events: none; font-size: 11px; gap: 8px; }
 .map-legend { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); }
@@ -66,14 +63,8 @@ progress::-moz-progress-bar { background: var(--region, #438262); }
 .map-legend-marker { display: block; flex: 0 0 16px; width: 16px; height: 16px; border: var(--marker-outline, 3px) solid var(--text); border-radius: 50%; background: var(--surface); box-shadow: 0 1px 4px #17372d40; }
 .map-legend-marker.is-visited { background: var(--text); }
 .map-caption button { pointer-events: auto; font-size: 11px; }
-.passport-marker-wrapper { background: transparent; border: 0; }
-.passport-marker { display: block; width: 24px; height: 24px; margin: 8px; border-radius: 50%; background: var(--surface); border: var(--marker-outline, 3px) solid var(--region); box-shadow: 0 1px 4px #17372d40; }
-.passport-marker.is-visited { background: var(--region); }
-.passport-marker.is-selected { outline: 3px solid #c78424; outline-offset: 4px; }
-.compact-markers .passport-marker:not(.is-selected) { width: 16px; height: 16px; margin: 12px; }
 .airport-tooltip { background: var(--surface); color: var(--text); border: 0; font-size: 10px; font-weight: 700; padding: 2px 6px; box-shadow: 0 1px 5px #0002; }
 .airport-tooltip::before { display: none; }
-[data-theme='dark'] .dim-basemap .leaflet-tile-pane { filter: brightness(.65) saturate(.75); }
 [data-theme='dark'] #map { background: #233e39; }
 .passport-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--surface); }
 .passport-content { padding: 18px; overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
@@ -129,7 +120,6 @@ progress::-moz-progress-bar { background: var(--region, #438262); }
 @media (max-width: 1000px) { .connection { display: none; } .workspace { grid-template-columns: 320px 1fr; } }
 @media (max-width: 760px) {
   .map-section { --marker-outline: 1.5px; }
-  .leaflet-control-zoom { display: none; }
   .airport-preview { display: grid; gap: 8px; position: absolute; bottom: 26px; left: 12px; right: 12px; z-index: 700; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); }
   .airport-preview strong { display: block; font-size: 14px; }
   .airport-preview p { font-size: 12px; color: var(--muted); }
@@ -151,3 +141,11 @@ progress::-moz-progress-bar { background: var(--region, #438262); }
 }
 @media (max-width: 760px) and (max-height: 550px) { .passport-app { min-height: 550px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+
+.passport-map-overlays { z-index: 1; position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.airport-map-hit { position: absolute; left: 0; top: 0; width: 40px; height: 40px; min-height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; pointer-events: auto; }
+.airport-map-hit:hover { background: transparent; }
+.airport-map-hit.is-selected { z-index: 2; }
+.airport-map-label { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); white-space: nowrap; pointer-events: none; }
+.airport-map-hit:hover .airport-map-label, .airport-map-hit:focus-visible .airport-map-label { display: block !important; }
+@media(max-width: 760px) { .maplibregl-ctrl-top-right { display: none; } }

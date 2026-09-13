@@ -1,7 +1,9 @@
-import type * as Leaflet from 'leaflet';
+import { PassportMap } from './map/renderer.js';
+import { OfflineMapManager, browserMapEnvironment } from './map/offline/manager.js';
+import { IndexedMapStorage } from './map/offline/storage.js';
 import { calculateProgress, filterAirports, isCalendarDate, validateBackup, validateProgram } from './domain.js';
 import { PassportStore } from './persistence.js';
-import type { AirportDefinition, AirportFilters, CheckIn, MapStyleDefinition, PassportBackup, PassportProgram } from './models.js';
+import type { AirportDefinition, AirportFilters, CheckIn, PassportBackup, PassportProgram } from './models.js';
 
 const escape = (text: string): string => text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const airportLabel = (airport: AirportDefinition): string => airport.identifiers?.faa?.trim() || airport.id;
@@ -11,12 +13,9 @@ const visitId = (): string => Array.from(crypto.getRandomValues(new Uint8Array(1
 /** Mount one program per page. Call destroy before replacing the app. */
 export class PassportApp {
   private root!: HTMLElement;
-  private map!: Leaflet.Map;
-  private leaflet!: typeof Leaflet.default;
-  private markers!: Leaflet.LayerGroup;
-  private tileLayer?: Leaflet.TileLayer;
-  private mapStyle?: MapStyleDefinition;
-  private tileUrl?: string;
+  private map!: Awaited<ReturnType<typeof PassportMap.create>>;
+  private offline!: OfflineMapManager;
+  private unsubscribeMap?: () => void;
   private store: PassportStore;
   private visits: CheckIn[] = [];
   private selected?: AirportDefinition;
@@ -28,7 +27,7 @@ export class PassportApp {
   private initialMapFit = false;
   private previewOnly = false;
   private saveNoticeTimer?: ReturnType<typeof setTimeout>;
-  constructor(private options: { program: PassportProgram }) {
+  constructor(private options: { program: PassportProgram; offlineShellReady?: () => Promise<boolean> }) {
     validateProgram(options.program);
     this.store = new PassportStore(options.program.id);
   }
@@ -63,10 +62,9 @@ export class PassportApp {
     const root = document.querySelector<HTMLElement>(target);
     if (!root) throw new Error(`Mount target not found: ${target}`);
     this.root = root;
+    this.root.inert = true;
+    this.root.setAttribute('aria-busy','true');
     this.root.classList.add('passport-app');
-    const L = (await import('leaflet')).default;
-    this.leaflet = L;
-    this.markers = L.layerGroup();
     const p = this.program;
     this.root.style.setProperty('--accent', p.branding.accent);
     this.root.innerHTML = `
@@ -82,22 +80,16 @@ export class PassportApp {
       <div class="filter-row"><label>Region<select id="region"><option value="">All regions</option>${p.regions.map(r => `<option value="${escape(r.id)}">${escape(r.name)}</option>`).join('')}</select></label><label>Passport<select id="visited"><option value="all">All airports</option><option value="unvisited">Not visited</option><option value="visited">Visited</option></select></label></div>
       <div class="mobile-toggle" aria-label="Airport view"><button type="button" data-view="map" aria-pressed="true">Map</button><button type="button" data-view="list" aria-pressed="false">List</button></div>
       <div id="airport-list" tabindex="-1" class="airport-list"></div></div><section id="detail" class="detail" hidden aria-label="Airport details"></section></section>
-      <section id="passport-panel" class="passport-panel" role="tabpanel" hidden aria-labelledby="passport-tab"><div class="passport-content"><p>${escape(p.description)}</p><p class="local-label">Saved on this device</p><div class="backup-actions"><button id="export" type="button">Export passport</button><label class="button">Import passport<input id="import" type="file" accept="application/json,.json" class="sr-only"></label></div><p id="passport-notice" role="status" aria-live="polite"></p><section class="passport-section"><h3>Your regional passport</h3><div id="regions" class="region-cards"></div></section><p class="data-notice">${escape(p.dataNotice)}</p></div></section>
-      </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><div id="map-style-control" class="map-style-control" hidden><label>Map style<select id="map-style"></select></label></div><section id="airport-preview" class="airport-preview" hidden aria-label="Selected airport"><div><strong id="preview-name"></strong><p id="preview-meta"></p></div><div class="preview-actions"><button id="preview-details" type="button">View details</button><button id="preview-close" type="button" aria-label="Dismiss airport preview">Close</button></div></section><div class="map-caption"><div class="map-legend"><span class="map-legend-item"><span class="map-legend-marker" aria-hidden="true"></span>Not visited</span><span class="map-legend-item"><span class="map-legend-marker is-visited" aria-hidden="true"></span>Visited</span></div><button id="fit" type="button">Show all matches</button></div></section></div>
+      <section id="passport-panel" class="passport-panel" role="tabpanel" hidden aria-labelledby="passport-tab"><div class="passport-content"><p>${escape(p.description)}</p><p class="local-label">Saved on this device</p><div class="backup-actions"><button id="export" type="button">Export passport</button><label class="button">Import passport<input id="import" type="file" accept="application/json,.json" class="sr-only"></label></div><p id="passport-notice" role="status" aria-live="polite"></p><section class="passport-section"><h3>Your regional passport</h3><div id="regions" class="region-cards"></div></section><section class="passport-section"><h3>Offline availability</h3><p id="offline-shell" role="status">App restart: not verified. Program airports: loaded.</p><p id="offline-visits" role="status">Passport storage: checking.</p><h3>Offline map</h3><p id="map-size"></p><p id="map-status" role="status" aria-live="polite"></p><progress id="map-progress" aria-label="Map download" hidden></progress><div class="backup-actions"><button id="map-download" type="button">Download map</button><button id="map-cancel" type="button" hidden>Cancel download</button><button id="map-delete" type="button">Delete map</button><button id="map-rollback" type="button">Restore previous map</button></div><p>Maps are stored separately from your visits. Keep a passport export as a backup.</p></section><p class="data-notice">${escape(p.dataNotice)}</p><p><a href="${escape(new URL('./notices.txt',import.meta.url).href)}" target="_blank" rel="noopener">Software licenses</a></p></div></section>
+      </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><section id="airport-preview" class="airport-preview" hidden aria-label="Selected airport"><div><strong id="preview-name"></strong><p id="preview-meta"></p></div><div class="preview-actions"><button id="preview-details" type="button">View details</button><button id="preview-close" type="button" aria-label="Dismiss airport preview">Close</button></div></section><div class="map-caption"><div class="map-legend"><span class="map-legend-item"><span class="map-legend-marker" aria-hidden="true"></span>Not visited</span><span class="map-legend-item"><span class="map-legend-marker is-visited" aria-hidden="true"></span>Visited</span></div><button id="fit" type="button">Show all matches</button></div></section></div>
       `;
     this.setupTheme();
     const connection = () => { this.el('#connection').textContent = navigator.onLine ? '● Local passport' : '○ Offline · airports & visits available'; };
     connection();
     for (const event of ['online', 'offline']) window.addEventListener(event, connection, { signal: this.events.signal });
-    this.map = L.map(this.el('#map'), { zoomControl: false, zoomSnap: 0.25 }).setView([p.map.center.latitude, p.map.center.longitude], p.map.zoom);
-    // Selected airports must sit above both ordinary markers and their labels.
-    this.map.createPane('selectedAirport').style.zIndex = '660';
-    const selectedLabels = this.map.createPane('selectedAirportLabel');
-    selectedLabels.style.zIndex = '670';
-    selectedLabels.style.pointerEvents = 'none';
-    L.control.zoom({ position: 'topright' }).addTo(this.map);
-    this.setupMapStyles();
-    this.markers.addTo(this.map);
+    this.offline = new OfflineMapManager(p.id, p.map.package, new IndexedMapStorage(p.id, p.map.package.id), browserMapEnvironment());
+    this.map = await PassportMap.create(this.el('#map'), [p.map.center.latitude, p.map.center.longitude], p.map.zoom, this.offline, airport => this.select(airport, true), message => this.announce(message));
+    this.setupOfflineMap();
     this.map.on('click', () => {
       if (this.selected) this.closeDetail(false);
     });
@@ -146,10 +138,12 @@ export class PassportApp {
         if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
       }
     }, { signal: this.events.signal });
-    try { this.visits = await this.store.list(); }
-    catch { this.announce('Device storage could not be opened. Check browser storage permissions before saving visits.'); }
+    try { this.visits = await this.store.list(); this.el('#offline-visits').textContent = 'Passport storage: available on this device.'; }
+    catch { this.el('#offline-visits').textContent = 'Passport storage: unavailable.'; this.announce('Device storage could not be opened. Check browser storage permissions before saving visits.'); }
     this.render();
     if (!this.initialMapFit) this.initialMapFit = this.fitMatchingAirports();
+    this.root.inert = false;
+    this.root.setAttribute('aria-busy','false');
   }
 
   private fitMatchingAirports(): boolean {
@@ -158,11 +152,11 @@ export class PassportApp {
     const airports = filterAirports(this.program, this.visits, this.filters);
     if (!airports.length) return true;
     // Leave room for the marker outlines, labels, and controls inside the map.
-    const topControls = Math.max(this.el('#map-style-control').offsetHeight, this.el('.leaflet-control-zoom').offsetHeight);
+    const topControls = (this.el('.maplibregl-ctrl-group')?.offsetHeight ?? 0);
     const top = Math.min(topControls + 24, container.clientHeight / 4);
     const bottom = Math.min(this.el('.map-caption').offsetHeight + 48, container.clientHeight / 4);
     const horizontal = Math.min(36, container.clientWidth / 4);
-    this.map.fitBounds(airports.map(a => [a.location.latitude, a.location.longitude] as Leaflet.LatLngTuple), {
+    this.map.fitBounds(airports.map(a => [a.location.latitude, a.location.longitude] as [number, number]), {
       paddingTopLeft: [horizontal, top], paddingBottomRight: [horizontal, bottom],
       maxZoom: airports.length === 1 ? 10 : 19, animate: false,
     });
@@ -197,51 +191,57 @@ export class PassportApp {
 
   private setupTheme() {
     const select = this.el<HTMLSelectElement>('#theme');
-    try { select.value = localStorage.getItem('passport:theme') || 'system'; } catch { /* Preference storage is optional. */ }
+    try { select.value = localStorage.getItem(`passport:${this.program.id}:theme`) ?? localStorage.getItem('passport:theme') ?? 'system'; } catch { /* Preference storage is optional. */ }
     if (!select.value) select.value = 'system';
     const media = matchMedia('(prefers-color-scheme: dark)');
     const apply = () => { document.documentElement.dataset.theme = select.value === 'system' ? (media.matches ? 'dark' : 'light') : select.value; this.updateBasemap(); };
     apply();
     media.addEventListener('change', apply, { signal: this.events.signal });
-    select.addEventListener('change', () => { apply(); try { localStorage.setItem('passport:theme', select.value); } catch { /* Still usable this session. */ } });
+    select.addEventListener('change', () => { apply(); try { localStorage.setItem(`passport:${this.program.id}:theme`, select.value); } catch { /* Still usable this session. */ } });
   }
 
-  private setupMapStyles() {
-    const config = this.program.map;
-    const styles = config.styles ?? [{ id: 'default', name: 'Standard', tileUrl: config.tileUrl, attribution: config.attribution }];
-    const select = this.el<HTMLSelectElement>('#map-style');
-    select.innerHTML = styles.map(style => `<option value="${escape(style.id)}">${escape(style.name)}</option>`).join('');
-    const preference = `passport:${this.program.id}:map-style`;
-    let saved: string | null = null;
-    try { saved = localStorage.getItem(preference); } catch { /* Preference storage is optional. */ }
-    this.mapStyle = styles.find(style => style.id === saved) ?? styles[0];
-    select.value = this.mapStyle.id;
-    this.el('#map-style-control').hidden = styles.length < 2;
-    select.addEventListener('change', () => {
-      this.mapStyle = styles.find(style => style.id === select.value)!;
-      try { localStorage.setItem(preference, this.mapStyle.id); } catch { /* Still usable this session. */ }
+  private setupOfflineMap() {
+    const archiveBytes = this.program.map.package.sizeBytes;
+    const resourceBytes = this.program.map.package.resources.reduce((sum,r) => sum+r.sizeBytes,0);
+    const totalBytes = archiveBytes+resourceBytes;
+    this.el('#map-size').textContent = `${this.program.map.package.name}: ${(archiveBytes/1e6).toFixed(1)} MB map + ${(resourceBytes/1e6).toFixed(1)} MB supporting files. Allow about ${((totalBytes*1.15+2*1024*1024)/1e6).toFixed(1)} MB free in addition to saved maps; actual storage varies.`;
+    this.unsubscribeMap = this.offline.subscribe(status => {
+      const busy = status.state === 'downloading' || status.state === 'checking';
+      const stateText = { 'not-downloaded':'Download before travel', checking:'Checking saved map', downloading:'Downloading', installed:'Verified', 'insufficient-storage':'Not enough storage', failed:'Download could not finish', 'integrity-failed':'Download verification failed', missing:'Stored map is missing or unreadable' }[status.state];
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      this.el('#map-status').textContent = status.state === 'downloading'
+        ? `Downloading: ${mb(status.downloaded)} / ${mb(status.total)} MB`
+        : `${status.active ? 'Map available on this device: ' + status.active.package.version : 'Map not available offline'}. ${stateText}. ${status.error ?? ''}${status.updateAvailable ? ' Update available.' : ''}${status.active && status.persistence !== 'granted' ? ' Browser storage may be cleared; check availability before travel.' : ''}${status.reclaimedBytes ? ' Last cleanup removed ' + mb(status.reclaimedBytes) + ' MB of map files.' : ''}`;
+      const progress = this.el<HTMLProgressElement>('#map-progress'); progress.hidden = status.state !== 'downloading'; progress.max = status.total; progress.value = status.downloaded;
+      this.el<HTMLButtonElement>('#map-download').disabled = busy;
+      this.el('#map-download').textContent = status.updateAvailable ? 'Update map' : `Download map (${mb(status.total)} MB)`;
+      this.el('#map-cancel').hidden = status.state !== 'downloading';
+      this.el<HTMLButtonElement>('#map-delete').disabled = busy || status.state === 'not-downloaded';
+      this.el<HTMLButtonElement>('#map-rollback').disabled = busy || !status.rollbackAvailable;
       this.updateBasemap();
     });
-    this.updateBasemap();
+    this.el('#map-download').addEventListener('click', () => void this.offline.download());
+    this.el('#map-cancel').addEventListener('click', () => this.offline.cancel());
+    this.el('#map-delete').addEventListener('click', () => void this.offline.delete());
+    this.el('#map-rollback').addEventListener('click', () => void this.offline.rollback().catch(error => this.announce(String(error))));
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      void this.offline.check();
+      void this.options.offlineShellReady?.().then(ready => {
+        this.el('#offline-shell').textContent = `App restart: ${ready ? 'available offline' : 'not verified; connect and reload'}. Program airports: loaded.`;
+      }).catch(() => {});
+    };
+    document.addEventListener('visibilitychange', refresh, { signal: this.events.signal });
+    window.addEventListener('online', refresh, { signal: this.events.signal });
+    navigator.serviceWorker?.addEventListener('controllerchange', refresh, { signal: this.events.signal });
+    refresh();
   }
 
   private updateBasemap() {
-    if (!this.mapStyle || !this.map) return;
-    const style = this.mapStyle;
-    const dark = document.documentElement.dataset.theme === 'dark' && !!style.darkTileUrl;
-    this.el('#map').classList.toggle('dim-basemap', !dark);
-    const url = dark ? style.darkTileUrl! : style.tileUrl;
-    if (url === this.tileUrl && this.tileLayer?.options.attribution === style.attribution) return;
-    this.tileLayer?.remove();
-    this.tileUrl = url;
-    this.tileLayer = this.leaflet.tileLayer(url, { attribution: style.attribution, maxZoom: 19 }).on('tileerror', () => {
-      const suggestion = (this.program.map.styles?.length ?? 1) > 1 ? 'Try another map style or check your connection.' : 'Check your connection.';
-      this.announce(`Basemap tiles are unavailable. ${suggestion} Airport markers, the list, and your passport still work.`);
-    }).addTo(this.map);
+    if (this.map) void this.map.basemap(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
   }
 
   private render() {
-    const L = this.leaflet;
     const compact = this.map.getZoom() < (this.program.map.markerDetailZoom ?? 0);
     this.el('#map').classList.toggle('compact-markers', compact);
     const p = this.program;
@@ -253,7 +253,6 @@ export class PassportApp {
       return `<button class="airport-card" data-airport="${escape(a.id)}" aria-pressed="${this.selected?.id === a.id}"><span class="airport-code" style="--region:${region.color}">${escape(airportLabel(a))}</span><span class="airport-name"><strong>${escape(a.name)}</strong><small>${escape(region.name)}</small></span><span class="visit-state" aria-label="${visited.has(a.id) ? 'Visited' : 'Not visited'}">${visited.has(a.id) ? '✓' : '○'}</span></button>`;
     }).join('') : '<p class="empty">No airports match. Try a different search or filter.</p>';
     this.root.querySelectorAll<HTMLButtonElement>('[data-airport]').forEach(button => button.addEventListener('click', () => this.select(p.airports.find(a => a.id === button.dataset.airport)!)));
-    this.markers.clearLayers();
     const visibleLabels = new Set<string>();
     const occupied: { left: number; right: number; top: number; bottom: number }[] = [];
     const size = this.map.getSize();
@@ -277,15 +276,7 @@ export class PassportApp {
       occupied.push(rect);
     }
     if (!labelsFit) visibleLabels.clear();
-    for (const airport of airports) {
-      const region = p.regions.find(r => r.id === airport.regionId)!;
-      const selected = this.selected?.id === airport.id;
-      const icon = L.divIcon({ className: 'passport-marker-wrapper', html: `<span aria-hidden="true" class="passport-marker ${visited.has(airport.id) ? 'is-visited' : ''} ${this.selected?.id === airport.id ? 'is-selected' : ''}" style="--region:${region.color}"></span>`, iconSize: [40, 40], iconAnchor: [20, 20] });
-      const marker = L.marker([airport.location.latitude, airport.location.longitude], { icon, pane: selected ? 'selectedAirport' : 'markerPane', title: `${airportLabel(airport)} ${airport.name}${visited.has(airport.id) ? ', visited' : ', not visited'}`, alt: airport.name }).addTo(this.markers).on('click', () => this.select(airport, true));
-      marker.getElement()?.setAttribute('aria-label', `${airportLabel(airport)} ${airport.name}, ${visited.has(airport.id) ? 'visited' : 'not visited'}`);
-      const label = document.createElement('span'); label.textContent = airportLabel(airport);
-      marker.bindTooltip(label, { pane: selected ? 'selectedAirportLabel' : 'tooltipPane', permanent: visibleLabels.has(airport.id) || selected, direction: 'bottom', offset: [0, 16], className: 'airport-tooltip' });
-    }
+    this.map.airports(airports, p.regions, visited, this.selected?.id, compact, visibleLabels);
     const progress = calculateProgress(p, this.visits);
     this.el('#overall').innerHTML = `<div><strong>${progress.visited}<span> / ${progress.total}</span></strong><span>airports visited</span></div><progress aria-label="Overall progress" value="${progress.visited}" max="${progress.total || 1}"></progress>`;
     this.el('#regions').innerHTML = progress.regions.map(r => `<article class="region-card" style="--region:${r.color}"><div><span class="region-dot" aria-hidden="true"></span><h3>${escape(r.name)}</h3><span>${r.complete ? '✓ Complete' : `${r.visited} / ${r.total}`}</span></div><progress aria-label="${escape(r.name)} progress" value="${r.visited}" max="${r.total || 1}"></progress><small>${r.complete ? 'Every journey leaves a mark.' : `${r.required} airports to complete this region`}</small></article>`).join('');
@@ -466,5 +457,5 @@ export class PassportApp {
     finally { input.value = ''; }
   }
 
-  async destroy() { clearTimeout(this.saveNoticeTimer); this.events.abort(); this.resize?.disconnect(); this.map?.remove(); await this.store.close(); this.root.replaceChildren(); this.root.classList.remove('passport-app'); }
+  async destroy() { clearTimeout(this.saveNoticeTimer); this.events.abort(); this.resize?.disconnect(); this.unsubscribeMap?.(); this.offline?.close(); this.map?.remove(); await this.offline?.storage.close(); await this.store.close(); this.root.replaceChildren(); this.root.classList.remove('passport-app'); }
 }
