@@ -22,6 +22,8 @@ The implementation uses TypeScript, browser DOM components, MapLibre/PMTiles, an
 
 ## Current milestone
 
+Core 0.5.1 fixes wheel and pinch zoom over airport hit targets by mounting the overlay in MapLibre's canvas container. Map gestures keep page scale unchanged; page pinch-zoom remains available outside the map. Standalone browser regressions cover wheel zoom, touch zoom, and marker activation.
+
 Core 0.5.0 adds explicit verified offline-map downloads, a local-resource MapLibre renderer, separate map storage, safe updates/rollback/deletion, and independent browser fixtures. See [the offline map contract and migration guide](docs/OFFLINE-MAPS.md). This is an unpublished implementation candidate; actual map-host and physical-device acceptance remain release gates.
 
 

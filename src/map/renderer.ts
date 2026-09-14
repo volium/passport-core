@@ -56,7 +56,9 @@ export class PassportMap {
     }});
     this.map.touchZoomRotate.disableRotation();
     this.map.addControl(new gl.NavigationControl({showCompass:false}),'top-right');
-    this.overlay=document.createElement('div');this.overlay.className='passport-map-overlays';container.append(this.overlay);
+    // Keep marker hit targets inside MapLibre's gesture container, like native markers.
+    // Wheel/touch events then reach its handlers and its touch-action applies to pinches.
+    this.overlay=document.createElement('div');this.overlay.className='passport-map-overlays';this.map.getCanvasContainer().append(this.overlay);
     this.map.on('move',()=>this.position());
     this.map.on('style.load',()=>this.layers());
     this.map.on('idle',()=>{ if (this.styleKey && !this.styleFailed) container.dataset.basemapState = 'ready'; });
