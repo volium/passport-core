@@ -20,13 +20,21 @@ test('core mounts, filters, preserves drafts, installs, reopens and deletes inde
   await page.getByRole('tab',{name:'Explore',exact:true}).click();
   await expect(page.getByLabel('Notes',{exact:false})).toHaveValue('Keep this draft');
   await page.getByRole('button',{name:'Save check-in'}).click();
+  // A click does not await the asynchronous IndexedDB save. Reload only after confirmation.
+  await expect(page.getByRole('button',{name:'Visit saved',exact:true})).toBeVisible();
+  await expect(page.locator('#overall strong')).toHaveText('1 / 2');
   await page.reload();
   await expect(page.locator('.airport-map-hit')).toHaveCount(2);
+  await expect(page.locator('#overall strong')).toHaveText('1 / 2');
   await page.getByRole('tab',{name:'My passport',exact:true}).click();
   await expect(page.locator('#map-status')).toContainText('Map available on this device');
   await page.locator('#map-delete').click();
   await expect(page.locator('#map-status')).toContainText('Map not available offline');
-  await expect(page.locator('#overall')).toContainText('1');
+  await expect(page.locator('#overall strong')).toHaveText('1 / 2');
+  await page.getByRole('tab',{name:'Explore',exact:true}).click();
+  await page.locator('[data-airport="AAA"]').click();
+  await expect(page.locator('.history article')).toHaveCount(1);
+  await expect(page.locator('.history')).toContainText('Keep this draft');
   await page.goto('/tests/browser/app.html?program=other');
   await expect(page.locator('.airport-map-hit')).toHaveCount(2);
   await page.getByRole('tab',{name:'My passport',exact:true}).click();
