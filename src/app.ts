@@ -1,3 +1,4 @@
+import { OfflineAccess, offlineCard, offlineNavigation, type InstallationGuidance } from './offline-access.js';
 import { PassportMap } from './map/renderer.js';
 import { OfflineMapManager, browserMapEnvironment } from './map/offline/manager.js';
 import { IndexedMapStorage } from './map/offline/storage.js';
@@ -16,6 +17,8 @@ export class PassportApp {
   private map!: Awaited<ReturnType<typeof PassportMap.create>>;
   private offline!: OfflineMapManager;
   private unsubscribeMap?: () => void;
+  private offlineUI?: OfflineAccess;
+  private rendererMessage = '';
   private store: PassportStore;
   private visits: CheckIn[] = [];
   private selected?: AirportDefinition;
@@ -27,7 +30,7 @@ export class PassportApp {
   private initialMapFit = false;
   private previewOnly = false;
   private saveNoticeTimer?: ReturnType<typeof setTimeout>;
-  constructor(private options: { program: PassportProgram; offlineShellReady?: () => Promise<boolean> }) {
+  constructor(private options: { program: PassportProgram; offlineShellReady?: () => Promise<boolean>; installationGuidance?: () => InstallationGuidance }) {
     validateProgram(options.program);
     this.store = new PassportStore(options.program.id);
   }
@@ -70,7 +73,7 @@ export class PassportApp {
     this.root.innerHTML = `
       <a class="skip-link" href="#airport-list">Skip to airports</a>
       <header class="app-header"><div class="brand"><span class="brand-icon" aria-hidden="true">✈</span><div><span class="eyebrow">${escape(p.branding.eyebrow)}</span><h1>${escape(p.shortName)}</h1></div></div>
-      <div id="overall" class="overall"></div><div class="header-actions"><span id="connection" class="connection"></span><label class="theme-label">Appearance<select id="theme" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div></header>
+      <div id="overall" class="overall"></div><div class="header-actions"><label class="theme-label">Appearance<select id="theme" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div></header>${offlineNavigation}
       <div class="workspace" data-view="map" data-section="explore"><aside class="sidebar" aria-label="Passport navigation and airport explorer">
       <div class="primary-tabs" role="tablist" aria-label="Main view"><button id="explore-tab" role="tab" type="button" aria-selected="true" aria-controls="explore-panel">Explore</button><button id="passport-tab" role="tab" type="button" aria-selected="false" aria-controls="passport-panel" tabindex="-1">My passport</button></div>
       <p id="notice" role="status" aria-live="polite"></p>
@@ -80,15 +83,12 @@ export class PassportApp {
       <div class="filter-row"><label>Region<select id="region"><option value="">All regions</option>${p.regions.map(r => `<option value="${escape(r.id)}">${escape(r.name)}</option>`).join('')}</select></label><label>Passport<select id="visited"><option value="all">All airports</option><option value="unvisited">Not visited</option><option value="visited">Visited</option></select></label></div>
       <div class="mobile-toggle" aria-label="Airport view"><button type="button" data-view="map" aria-pressed="true">Map</button><button type="button" data-view="list" aria-pressed="false">List</button></div>
       <div id="airport-list" tabindex="-1" class="airport-list"></div></div><section id="detail" class="detail" hidden aria-label="Airport details"></section></section>
-      <section id="passport-panel" class="passport-panel" role="tabpanel" hidden aria-labelledby="passport-tab"><div class="passport-content"><p>${escape(p.description)}</p><p class="local-label">Saved on this device</p><div class="backup-actions"><button id="export" type="button">Export passport</button><label class="button">Import passport<input id="import" type="file" accept="application/json,.json" class="sr-only"></label></div><p id="passport-notice" role="status" aria-live="polite"></p><section class="passport-section"><h3>Your regional passport</h3><div id="regions" class="region-cards"></div></section><section class="passport-section"><h3>Offline availability</h3><p id="offline-shell" role="status">App restart: not verified. Program airports: loaded.</p><p id="offline-visits" role="status">Passport storage: checking.</p><h3>Offline map</h3><p id="map-size"></p><p id="map-status" role="status" aria-live="polite"></p><progress id="map-progress" aria-label="Map download" hidden></progress><div class="backup-actions"><button id="map-download" type="button">Download map</button><button id="map-cancel" type="button" hidden>Cancel download</button><button id="map-delete" type="button">Delete map</button><button id="map-rollback" type="button">Restore previous map</button></div><p>Maps are stored separately from your visits. Keep a passport export as a backup.</p></section><p class="data-notice">${escape(p.dataNotice)}</p><p><a href="${escape(new URL('./notices.txt',import.meta.url).href)}" target="_blank" rel="noopener">Software licenses</a></p></div></section>
+      <section id="passport-panel" class="passport-panel" role="tabpanel" hidden aria-labelledby="passport-tab"><div class="passport-content"><p>${escape(p.description)}</p><p class="local-label">Saved on this device</p><div class="backup-actions"><button id="export" type="button">Export passport</button><label class="button">Import passport<input id="import" type="file" accept="application/json,.json" class="sr-only"></label></div><p id="passport-notice" role="status" aria-live="polite"></p><section class="passport-section"><h3>Your regional passport</h3><div id="regions" class="region-cards"></div></section><p class="data-notice">${escape(p.dataNotice)}</p><p><a href="${escape(new URL('./notices.txt',import.meta.url).href)}" target="_blank" rel="noopener">Software licenses</a></p></div></section>
       </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><section id="airport-preview" class="airport-preview" hidden aria-label="Selected airport"><div><strong id="preview-name"></strong><p id="preview-meta"></p></div><div class="preview-actions"><button id="preview-details" type="button">View details</button><button id="preview-close" type="button" aria-label="Dismiss airport preview">Close</button></div></section><div class="map-caption"><div class="map-legend"><span class="map-legend-item"><span class="map-legend-marker" aria-hidden="true"></span>Not visited</span><span class="map-legend-item"><span class="map-legend-marker is-visited" aria-hidden="true"></span>Visited</span></div><button id="fit" type="button">Show all matches</button></div></section></div>
-      `;
+      ${offlineCard}`;
     this.setupTheme();
-    const connection = () => { this.el('#connection').textContent = navigator.onLine ? '● Local passport' : '○ Offline · airports & visits available'; };
-    connection();
-    for (const event of ['online', 'offline']) window.addEventListener(event, connection, { signal: this.events.signal });
     this.offline = new OfflineMapManager(p.id, p.map.package, new IndexedMapStorage(p.id, p.map.package.id), browserMapEnvironment());
-    this.map = await PassportMap.create(this.el('#map'), [p.map.center.latitude, p.map.center.longitude], p.map.zoom, this.offline, airport => this.select(airport, true), message => this.announce(message));
+    this.map = await PassportMap.create(this.el('#map'), [p.map.center.latitude, p.map.center.longitude], p.map.zoom, this.offline, airport => this.select(airport, true), message => { this.rendererMessage = message; this.offlineUI?.rendererStatus(message); });
     this.setupOfflineMap();
     this.map.on('click', () => {
       if (this.selected) this.closeDetail(false);
@@ -144,6 +144,7 @@ export class PassportApp {
     if (!this.initialMapFit) this.initialMapFit = this.fitMatchingAirports();
     this.root.inert = false;
     this.root.setAttribute('aria-busy','false');
+    this.offlineUI?.start();
   }
 
   private fitMatchingAirports(): boolean {
@@ -181,7 +182,7 @@ export class PassportApp {
   private syncPanels() {
     const mobile = matchMedia('(max-width: 760px)').matches;
     const modal = mobile && !this.passportOpen && !!this.selected && !this.previewOnly;
-    for (const selector of ['.app-header', '.map-section', '#notice', '.skip-link', '.primary-tabs']) this.el(selector).inert = modal;
+    for (const selector of ['.app-header', '.offline-navigation', '#offline-card', '.map-section', '#notice', '.skip-link', '.primary-tabs']) this.el(selector).inert = modal;
     this.el('.browse').inert = this.passportOpen || (mobile && !!this.selected && !this.previewOnly);
     this.el('#detail').inert = this.passportOpen;
     const detail = this.el('#detail');
@@ -201,40 +202,13 @@ export class PassportApp {
   }
 
   private setupOfflineMap() {
-    const archiveBytes = this.program.map.package.sizeBytes;
-    const resourceBytes = this.program.map.package.resources.reduce((sum,r) => sum+r.sizeBytes,0);
-    const totalBytes = archiveBytes+resourceBytes;
-    this.el('#map-size').textContent = `${this.program.map.package.name}: ${(archiveBytes/1e6).toFixed(1)} MB map + ${(resourceBytes/1e6).toFixed(1)} MB supporting files. Allow about ${((totalBytes*1.15+2*1024*1024)/1e6).toFixed(1)} MB free in addition to saved maps; actual storage varies.`;
+    this.offlineUI = new OfflineAccess(this.root, this.offline, {programId:this.program.id, shellReady:this.options.offlineShellReady, guidance:this.options.installationGuidance, retry:()=>this.updateBasemap(), exportPassport:()=>{ void this.export(); }});
+    this.offlineUI.rendererStatus(this.rendererMessage);
+    let source = '';
     this.unsubscribeMap = this.offline.subscribe(status => {
-      const busy = status.state === 'downloading' || status.state === 'checking';
-      const stateText = { 'not-downloaded':'Download before travel', checking:'Checking saved map', downloading:'Downloading', installed:'Verified', 'insufficient-storage':'Not enough storage', failed:'Download could not finish', 'integrity-failed':'Download verification failed', missing:'Stored map is missing or unreadable' }[status.state];
-      const mb = (n: number) => (n / 1e6).toFixed(1);
-      this.el('#map-status').textContent = status.state === 'downloading'
-        ? `Downloading: ${mb(status.downloaded)} / ${mb(status.total)} MB`
-        : `${status.active ? 'Map available on this device: ' + status.active.package.version : 'Map not available offline'}. ${stateText}. ${status.error ?? ''}${status.updateAvailable ? ' Update available.' : ''}${status.active && status.persistence !== 'granted' ? ' Browser storage may be cleared; check availability before travel.' : ''}${status.reclaimedBytes ? ' Last cleanup removed ' + mb(status.reclaimedBytes) + ' MB of map files.' : ''}`;
-      const progress = this.el<HTMLProgressElement>('#map-progress'); progress.hidden = status.state !== 'downloading'; progress.max = status.total; progress.value = status.downloaded;
-      this.el<HTMLButtonElement>('#map-download').disabled = busy;
-      this.el('#map-download').textContent = status.updateAvailable ? 'Update map' : `Download map (${mb(status.total)} MB)`;
-      this.el('#map-cancel').hidden = status.state !== 'downloading';
-      this.el<HTMLButtonElement>('#map-delete').disabled = busy || status.state === 'not-downloaded';
-      this.el<HTMLButtonElement>('#map-rollback').disabled = busy || !status.rollbackAvailable;
-      this.updateBasemap();
+      const next = status.active?.generation ?? (status.state === 'checking' ? 'checking' : 'online');
+      if (source !== next) { source = next; this.updateBasemap(); }
     });
-    this.el('#map-download').addEventListener('click', () => void this.offline.download());
-    this.el('#map-cancel').addEventListener('click', () => this.offline.cancel());
-    this.el('#map-delete').addEventListener('click', () => void this.offline.delete());
-    this.el('#map-rollback').addEventListener('click', () => void this.offline.rollback().catch(error => this.announce(String(error))));
-    const refresh = () => {
-      if (document.visibilityState !== 'visible') return;
-      void this.offline.check();
-      void this.options.offlineShellReady?.().then(ready => {
-        this.el('#offline-shell').textContent = `App restart: ${ready ? 'available offline' : 'not verified; connect and reload'}. Program airports: loaded.`;
-      }).catch(() => {});
-    };
-    document.addEventListener('visibilitychange', refresh, { signal: this.events.signal });
-    window.addEventListener('online', refresh, { signal: this.events.signal });
-    navigator.serviceWorker?.addEventListener('controllerchange', refresh, { signal: this.events.signal });
-    refresh();
   }
 
   private updateBasemap() {
@@ -457,5 +431,5 @@ export class PassportApp {
     finally { input.value = ''; }
   }
 
-  async destroy() { clearTimeout(this.saveNoticeTimer); this.events.abort(); this.resize?.disconnect(); this.unsubscribeMap?.(); this.offline?.close(); this.map?.remove(); await this.offline?.storage.close(); await this.store.close(); this.root.replaceChildren(); this.root.classList.remove('passport-app'); }
+  async destroy() { clearTimeout(this.saveNoticeTimer); this.events.abort(); this.resize?.disconnect(); this.unsubscribeMap?.(); this.offlineUI?.destroy(); this.offline?.close(); this.map?.remove(); await this.offline?.storage.close(); await this.store.close(); this.root.replaceChildren(); this.root.classList.remove('passport-app'); }
 }

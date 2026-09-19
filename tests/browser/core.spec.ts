@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { fixture } from '../map-fixture.js';
 
 test.beforeEach(async ({ context }) => {
+  await context.addInitScript(() => { for(const id of ['independent-core','other']) localStorage.setItem(`passport:${id}:offline-introduction:browser`,'seen'); });
   const { env } = await fixture();
   await context.route('https://fixture.invalid/**', async route => {
     const response = await env.fetch(route.request().url());
@@ -14,10 +15,10 @@ test('core mounts, filters, preserves drafts, installs, reopens and deletes inde
   await expect(page.locator('.airport-map-hit')).toHaveCount(2);
   await page.locator('[data-airport="AAA"]').click();
   await page.getByLabel('Notes', {exact:false}).fill('Keep this draft');
-  await page.getByRole('tab',{name:'My passport',exact:true}).click();
+  await page.locator('#offline-access').click();
   await page.locator('#map-download').click();
   await expect(page.locator('#map-status')).toContainText('Map available on this device');
-  await page.getByRole('tab',{name:'Explore',exact:true}).click();
+  await page.locator('#offline-close').click();
   await expect(page.getByLabel('Notes',{exact:false})).toHaveValue('Keep this draft');
   await page.getByRole('button',{name:'Save check-in'}).click();
   // A click does not await the asynchronous IndexedDB save. Reload only after confirmation.
@@ -26,19 +27,19 @@ test('core mounts, filters, preserves drafts, installs, reopens and deletes inde
   await page.reload();
   await expect(page.locator('.airport-map-hit')).toHaveCount(2);
   await expect(page.locator('#overall strong')).toHaveText('1 / 2');
-  await page.getByRole('tab',{name:'My passport',exact:true}).click();
+  await page.locator('#offline-access').click();
   await expect(page.locator('#map-status')).toContainText('Map available on this device');
-  await page.locator('#map-delete').click();
-  await expect(page.locator('#map-status')).toContainText('Map not available offline');
+  await page.evaluate(() => (window as unknown as {fixtureApp:{offline:{delete:()=>Promise<void>}}}).fixtureApp.offline.delete());
+  await expect(page.locator('#map-status')).toContainText('Map not downloaded');
   await expect(page.locator('#overall strong')).toHaveText('1 / 2');
-  await page.getByRole('tab',{name:'Explore',exact:true}).click();
+  await page.locator('#offline-close').click();
   await page.locator('[data-airport="AAA"]').click();
   await expect(page.locator('.history article')).toHaveCount(1);
   await expect(page.locator('.history')).toContainText('Keep this draft');
   await page.goto('/tests/browser/app.html?program=other');
   await expect(page.locator('.airport-map-hit')).toHaveCount(2);
-  await page.getByRole('tab',{name:'My passport',exact:true}).click();
-  await expect(page.locator('#map-status')).toContainText('Map not available offline');
+  await page.locator('#offline-access').click();
+  await expect(page.locator('#map-status')).toContainText('Map not downloaded');
   await expect(page.locator('#overall strong')).toHaveText('0 / 2');
 });
 
@@ -62,13 +63,13 @@ test('map installation and deletion refresh another tab without sharing program 
   for (const tab of [page,other]) {
     await tab.goto('/tests/browser/app.html');
     await expect(tab.locator('.airport-map-hit')).toHaveCount(2);
-    await tab.getByRole('tab',{name:'My passport',exact:true}).click();
+    await tab.locator('#offline-access').click();
     await expect(tab.locator('#map-download')).toBeEnabled();
   }
   await page.locator('#map-download').click();
   await expect(other.locator('#map-status')).toContainText('Map available on this device');
-  await other.locator('#map-delete').click();
-  await expect(page.locator('#map-status')).toContainText('Map not available offline');
+  await other.evaluate(() => (window as unknown as {fixtureApp:{offline:{delete:()=>Promise<void>}}}).fixtureApp.offline.delete());
+  await expect(page.locator('#map-status')).toContainText('Map needs attention');
   await other.close();
 });
 
@@ -93,11 +94,11 @@ test('missing secure-context map APIs explain the limitation and leave passport 
   });
   await page.goto('/tests/browser/app.html');
   await expect(page.locator('.airport-map-hit')).toHaveCount(2);
-  await page.getByRole('tab',{name:'My passport',exact:true}).click();
+  await page.locator('#offline-access').click();
   await expect(page.locator('#map-status')).toContainText('cannot safely coordinate map downloads');
   await page.locator('#map-download').click();
   await expect(page.locator('#map-status')).toContainText('cannot safely coordinate map downloads');
-  await page.getByRole('tab',{name:'Explore',exact:true}).click();
+  await page.locator('#offline-close').click();
   await page.locator('[data-airport="AAA"]').click();
   await page.getByRole('button',{name:'Save check-in'}).click();
   await expect(page.locator('#overall strong')).toHaveText('1 / 2');
@@ -155,4 +156,55 @@ test.describe('touch gestures', () => {
     await expect(marker).toHaveAttribute('aria-pressed', 'true');
     await session.detach();
   });
+});
+
+test('offline card is independent, dismissible, and hides granted protection', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.storage,'persisted',{value:async()=>true});
+    Object.defineProperty(navigator.storage,'persist',{value:async()=>{throw Error('should not request')}});
+  });
+  await page.goto('/tests/browser/app.html?program=onboarding');
+  await expect(page.locator('#offline-card')).toBeVisible();
+  await expect(page.locator('#storage-protection')).toBeHidden();
+  const setup=page.locator('#offline-setup details');
+  await setup.locator('summary').click();await expect(setup).toHaveAttribute('open','');
+  await page.keyboard.press('Space');await expect(setup).not.toHaveAttribute('open','');
+  await page.keyboard.press('Escape');await expect(page.locator('#offline-card')).toBeHidden();await expect(page.locator('#offline-access')).toBeFocused();
+  await page.locator('[data-airport="AAA"]').click();await page.getByLabel('Notes',{exact:false}).fill('Card preserves draft');
+  await page.locator('#offline-access').click();await page.locator('#map-download').click();
+  await expect(page.locator('#map-status')).toContainText('Map available on this device');
+  await expect(page.locator('#map-delete')).toHaveCount(0);
+  await page.locator('#offline-close').click();await expect(page.getByLabel('Notes',{exact:false})).toHaveValue('Card preserves draft');
+  await page.locator('#passport-tab').click();await page.locator('#offline-access').click();await page.keyboard.press('Escape');await expect(page.locator('#passport-tab')).toHaveAttribute('aria-selected','true');
+  await page.reload();await expect(page.locator('#offline-card')).toBeHidden();
+  await page.setViewportSize({width:390,height:844});await expect(page.locator('#offline-access')).toBeVisible();await page.locator('#offline-access').click();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+test('standalone launch downloads automatically with a single persistence request', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator,'standalone',{value:true});
+    Object.defineProperty(navigator.storage,'persisted',{value:async()=>false});
+    Object.defineProperty(navigator.storage,'persist',{value:async()=>{const key='requests';localStorage.setItem(key,String(Number(localStorage.getItem(key)||0)+1));return false;}});
+  });
+  await page.goto('/tests/browser/app.html?program=standalone-test');
+  await expect(page.locator('#map-status')).toContainText('Map available on this device');
+  await expect(page.locator('#offline-setup')).toBeHidden();await page.locator('#storage-protection').click();
+  await expect(page.locator('#protection-details')).toHaveAttribute('open','');
+  await page.reload();await expect(page.locator('#offline-summary')).toContainText('Map available offline');
+  expect(await page.evaluate(()=>localStorage.getItem('requests'))).toBe('1');
+});
+
+
+test('renderer retry clears its warning without clearing unrelated feedback', async ({ page }) => {
+  await page.route('https://fixture.invalid/style',route=>route.abort());
+  await page.goto('/tests/browser/app.html');
+  await page.locator('#offline-access').click();
+  await expect(page.locator('#map-renderer-status')).toBeVisible();
+  await page.evaluate(()=>{document.querySelector('#notice')!.textContent='Keep unrelated save feedback';});
+  await page.unroute('https://fixture.invalid/style');
+  await page.locator('#map-retry').click();
+  await expect(page.locator('#map')).toHaveAttribute('data-basemap-state','ready');
+  await expect(page.locator('#map-renderer-status')).toBeHidden();
+  await expect(page.locator('#notice')).toHaveText('Keep unrelated save feedback');
 });

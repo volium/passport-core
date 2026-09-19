@@ -2,6 +2,10 @@
 
 Program-independent TypeScript implementation for local aviation passports. This repository is named `passport-core`; earlier sections of [Planning.md](Planning.md) call it `core-passport`. Both refer to this repository, publishing as `@passport/core`.
 
+## Offline access (0.6.0)
+
+The approved Offline access card is implemented with persistent numeric progress, reusable installation guidance, automatic storage-protection checking, and independent renderer recovery. Browser downloads remain manual; eligible standalone launches prepare the initial map automatically with Cancel and retained retry suppression. See [offline API and lifecycle documentation](docs/OFFLINE-MAPS.md). This revision is awaiting physical-device acceptance and deployment.
+
 ## Development
 
 Requires Node.js 24 LTS and npm. From this repository:

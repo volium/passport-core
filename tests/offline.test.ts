@@ -68,3 +68,70 @@ describe('independent offline map lifecycle', () => {
     await next.download();expect(next.status.state).toBe('failed');expect((await storage.inventory()).active!.package.version).toBe('1');await storage.close();
   });
 });
+
+describe('offline setup policy and protection', () => {
+  it('checks persistence on reopening and requests only once after a denial', async () => {
+    const {p,env}=await fixture(); const storage=new IndexedMapStorage(crypto.randomUUID(),p.id);
+    let requests=0, granted=false;
+    const configured={...env,persisted:async()=>granted,persist:async()=>{requests++;return false;}};
+    const a=new OfflineMapManager('test',p,storage,configured);
+    await a.protection(true); expect(a.status.persistence).toBe('not-granted');
+    const b=new OfflineMapManager('test',p,storage,configured);
+    await b.protection(true); expect(requests).toBe(1);
+    granted=true;await b.protection();expect(b.status.persistence).toBe('granted');
+    const rejected=new OfflineMapManager('test',p,storage,{...env,persisted:async()=>{throw Error('unavailable')}});
+    await rejected.protection();expect(rejected.status.persistence).toBe('unavailable');await storage.close();
+  });
+  it('requires browser action, defers offline standalone setup, and reuses a verified map', async () => {
+    const {p,env}=await fixture(); const storage=new IndexedMapStorage(crypto.randomUUID(),p.id);let requests=0;
+    const manager=new OfflineMapManager('test',p,storage,{...env,fetch:async(...args)=>{requests++;return env.fetch(...args)}});
+    await manager.prepare(false,true);expect(requests).toBe(0);
+    await manager.prepare(true,false);expect(manager.status.state).toBe('waiting');expect(requests).toBe(0);
+    const states:string[]=[];manager.subscribe(s=>states.push(s.state));await manager.prepare(true,true);
+    expect(manager.status.state).toBe('installed');expect(states).toContain('verifying');const count=requests;
+    await manager.prepare(true,true);expect(requests).toBe(count);await storage.close();
+  });
+  it.each(['cancelled','deleted','interrupted','installed'])('never automatically redownloads when retained control says %s', async attempt => {
+    const {p,env}=await fixture();const storage=new IndexedMapStorage(crypto.randomUUID(),p.id);let requests=0;
+    await storage.setInventory({control:{attempt}});
+    const manager=new OfflineMapManager('test',p,storage,{...env,fetch:async(...args)=>{requests++;return env.fetch(...args)}});
+    await manager.prepare(true,true);expect(requests).toBe(0);await manager.download();expect(manager.status.state).toBe('installed');await storage.close();
+  });
+  it('remembers cancellation while waiting and prevents automatic retry after a failed transfer', async () => {
+    const {p,env}=await fixture();const storage=new IndexedMapStorage(crypto.randomUUID(),p.id);
+    // Use real serialization to exercise cancellation/foreground ordering.
+    let tail=Promise.resolve();const lock:typeof env.lock=(_name,action)=>{const result=tail.then(action);tail=result.then(()=>{},()=>{});return result;};
+    let requests=0;const configured={...env,lock,fetch:async()=>{requests++;throw Error('offline')}};
+    const a=new OfflineMapManager('test',p,storage,configured);await a.prepare(true,false);a.cancel();await a.prepare(true,true);expect(requests).toBe(0);
+    await a.download();expect(requests).toBe(1);await a.prepare(true,true);expect(requests).toBe(1);await storage.close();
+  });
+  it('does not transfer automatically when suppression metadata cannot be written',async()=>{
+    const {p,env}=await fixture();const storage=new IndexedMapStorage(crypto.randomUUID(),p.id);let requests=0;
+    storage.setInventory=async()=>{throw Error('storage denied')};
+    const a=new OfflineMapManager('test',p,storage,{...env,fetch:async(...args)=>{requests++;return env.fetch(...args)}});
+    await a.prepare(true,true);expect(requests).toBe(0);expect(a.status.error).toContain('remembered');await storage.close();
+  });
+});
+
+
+it('closing an offline waiting app does not count as an explicit cancellation',async()=>{
+  const {p,env}=await fixture();const storage=new IndexedMapStorage(crypto.randomUUID(),p.id);
+  const a=new OfflineMapManager('test',p,storage,env);await a.prepare(true,false);a.close();
+  const b=new OfflineMapManager('test',p,storage,env);await b.prepare(true,true);expect(b.status.state).toBe('installed');await storage.close();
+});
+
+it('serializes simultaneous automatic launches and downloads a package only once',async()=>{
+  const {p,env}=await fixture();const storage=new IndexedMapStorage(crypto.randomUUID(),p.id);let tail=Promise.resolve(),requests=0;
+  const lock:typeof env.lock=(_name,action)=>{const result=tail.then(action);tail=result.then(()=>{},()=>{});return result;};
+  const configured={...env,lock,fetch:async(...args:Parameters<typeof fetch>)=>{requests++;return env.fetch(...args)}};
+  const a=new OfflineMapManager('test',p,storage,configured),b=new OfflineMapManager('test',p,storage,configured);
+  await Promise.all([a.prepare(true,true),b.prepare(true,true)]);expect(requests).toBe(p.resources.length+1);expect(a.status.active).toBeDefined();expect(b.status.active).toBeDefined();await storage.close();
+});
+
+
+it('makes one fresh protection request after switching from browser to standalone in shared storage',async()=>{
+  const {p,env}=await fixture();const storage=new IndexedMapStorage(crypto.randomUUID(),p.id);let context:'browser'|'standalone'='browser',requests=0;
+  const manager=new OfflineMapManager('test',p,storage,{...env,persistenceContext:()=>context,persisted:async()=>false,persist:async()=>{requests++;return false;}});
+  await manager.protection(true);await manager.protection(true);expect(requests).toBe(1);
+  context='standalone';await manager.protection(true);await manager.protection(true);expect(requests).toBe(2);await storage.close();
+});

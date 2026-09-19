@@ -1,10 +1,10 @@
 # Aviation Passport Platform
 
-> Implementation update (2026-09-13): the owner reports the MapLibre/PMTiles application deployed and working. Core 0.5.1 and the consuming tarball include the marker wheel/pinch fix, confirmed locally on desktop and mobile and committed in both repositories. Deployment of that patch is not inferred. Offline onboarding and readiness improvements below are planned only; reported installed-PWA download/status inconsistencies remain unresolved. Earlier release records are historical, not current readiness claims.
+> Implementation update (2026-09-13): the owner reports the MapLibre/PMTiles application deployed and working. Core 0.5.1 and the consuming tarball include the marker wheel/pinch fix, confirmed locally on desktop and mobile and committed in both repositories. Deployment of that patch is not inferred. Offline onboarding and readiness improvements were planned at this milestone and are now implemented locally in 0.6.0; reported installed-PWA download/status inconsistencies remain unresolved. Earlier release records are historical, not current readiness claims.
 
 ## Architecture, Requirements, and Implementation Plan
 
-**Status:** MapLibre/PMTiles and chunked IndexedDB offline packages are implemented. This documentation update plans the next offline UX work before implementation. Section 32.3 records the proposed browser-manual/PWA-automatic setup direction; Sections 32.4-32.5, 34.1, 58.2, and Phase U1 define feedback, recovery, installed-app behavior, and acceptance. No implementation, commit, or deployment is authorized by this planning record alone.
+**Status (2026-09-19):** Core 0.6.0 implements the approved Phase U1 offline-access card and setup/status behavior in the working tree. Fly Washington integrates the packaged core and app-owned installation guidance. Physical installed-PWA acceptance and deployment of this revision remain pending. MapLibre/PMTiles and chunked IndexedDB remain the storage/rendering architecture. Section 32.3 records the implemented browser-manual/PWA-automatic setup policy; Sections 32.4-32.5, 34.1, 58.2, and Phase U1 define feedback, recovery, installed-app behavior, and acceptance. No implementation, commit, or deployment is authorized by this planning record alone.
 
 **Primary repositories:** `passport-core` (called `core-passport` below), `fly-washington`
 
@@ -512,7 +512,7 @@ Example:
 ```json
 {
   "dependencies": {
-    "@passport/core": "file:vendor/passport-core-0.5.1.tgz"
+    "@passport/core": "file:vendor/passport-core-0.6.0.tgz"
   }
 }
 ```
@@ -1396,9 +1396,9 @@ Installation state, update status, and persistence status are separate dimension
 
 Provide concise accessible status text, keyboard-operable Download/Cancel/Retry/Update controls, and screen-reader progress/completion/error announcements without excessive repetition. The planned normal UI does not offer deletion of a healthy installed map; core retains scoped removal for cleanup and recovery (Section 33.5). Missing basemap messages must not cover controls or prevent airport/list/passport use.
 
-## 32.3 Discoverable setup and download policy (planned direction)
+## 32.3 Discoverable setup and download policy
 
-Owner direction (2026-09-13): browser tabs offer map download; an installed PWA starts its initial map download automatically with visible status and Cancel. On first mobile browser use, recommend home-screen installation and explain the platform-specific steps and storage implications before a large transfer. This supersedes the earlier undecided A-E comparison and the original migration's blanket exclusion of automatic large downloads only for the bounded standalone flow below. Implementation remains deferred until plan review is complete.
+Owner direction (2026-09-13): browser tabs offer map download; an installed PWA starts its initial map download automatically with visible status and Cancel. On first mobile browser use, recommend home-screen installation and explain the platform-specific steps and storage implications before a large transfer. This supersedes the earlier undecided A-E comparison and the original migration's blanket exclusion of automatic large downloads only for the bounded standalone flow below. The owner approved the responsive design and subsequently authorized implementation; core 0.6.0 now implements this policy locally.
 
 - **First use on mobile and desktop:** open the same dismissible, non-modal Offline access card used by the persistent navigation control (Section 32.4): **For the best experience, add this app to your Home Screen.** Offer platform/browser-specific steps, **Download map in this browser**, and **Not now**. Show measured total transfer size and mobile-data implications before browser download. Use the same card on desktop, with guidance appropriate to the selected platform/browser. Dismissal is remembered in the current context; installation help remains accessible later. Do not block visits or force installation.
 - **Installation copy:** say **Open it there and the offline map (<total size in MB>) should start downloading automatically.** Derive the total from the manifest. Use **start downloading**, not **start preparing**, in user instructions. Pair the iOS Share-menu instruction with a recognizable square-and-up-arrow glyph and readable **Share** text; keep the glyph slightly smaller than the instruction line. It supplements the instruction and is decorative to screen readers. Retain connectivity, cancellation, and existing-package qualifications from this section.
@@ -1412,7 +1412,7 @@ Owner direction (2026-09-13): browser tabs offer map download; an installed PWA 
 
 Core owns context-aware orchestration, scoped control state, persistence handling, and reusable setup/status UI. Program configuration supplies package identity, size, resources, and branding. App composition owns installation integration and may supply guidance through a narrow callback; no program-name checks, new backend, OPFS migration, or duplicated application-owned download logic are introduced.
 
-## 32.4 One visible offline entry point (planned)
+## 32.4 One visible offline entry point
 
 Replace the current connection-derived Local passport label with a keyboard/touch-operable **Offline access** control in the persistent application navigation on desktop and mobile. It must not disappear at the current 1,000px breakpoint. A compact mobile label may wrap or shorten presentation while preserving an accessible name and a visible text state; do not use a colored dot alone.
 
@@ -1432,7 +1432,7 @@ A declined request does not stop a viable map download or visit workflow. Explai
 
 On iOS, home-screen use is a factor in WebKit's persistence decision, not a guarantee and not evidence that browser tabs can never obtain it ([WebKit storage policy](https://webkit.org/blog/14403/updates-to-storage-policy/)). Both tabs and PWAs require actual checks, and users can still clear stored site data even when protected.
 
-## 32.5 Progress, completion, and recovery feedback (planned)
+## 32.5 Progress, completion, and recovery feedback
 
 - A tap or automatic standalone start must immediately show Starting/Downloading and expose adjacent status/progress and Cancel. Keep numerical progress visible in the persistent Offline access control on desktop and mobile while the user browses the map, list, or passport: for example **Map download 42%**, with a thin determinate progress bar. A remaining-MB label is an acceptable compact alternative. A spinner, icon, or generic Downloading label alone is insufficient once the manifest total is known. Expanded detail shows received/total MB and optionally remaining MB. Count archive plus supporting-file bytes, clamp displayed values, and avoid excessive decimal precision; use manifest totals and actual received bytes rather than elapsed-time guesses.
 - Separate network transfer from verification: at 100% received, show **Download complete - verifying map** until resources are checked, activated, and locally reopened. Do not fabricate a verification percentage or leave a misleading 100% Downloading state. Announce completion once; keep **Map available offline** visible after navigating away and returning. Never display a false installed state because a request started or reached 100%.
@@ -2505,9 +2505,9 @@ existing airport/passport/appearance/accessibility behavior preserved
 
 Migration phases record the map implementation and its remaining release gates; the original numbered roadmap follows for historical context and remaining non-map features.
 
-## Phase U1 — Offline setup and trustworthy status (planned, not implemented)
+## Phase U1 — Offline setup and trustworthy status (implemented locally; device acceptance pending)
 
-Design-review artifact (2026-09-13): `fly-washington/docs/mockups/offline-access.html` is a self-contained interactive desktop/mobile mockup, with scenario controls and usage notes in its adjacent README. It demonstrates layout and simulated feedback only; production download/storage behavior is unchanged. Feedback revision (2026-09-19): one non-modal map card now serves first use and the persistent Offline access control on both layouts; installation help remains available, granted protection is hidden, and exception details expand on demand. Owner approval (2026-09-19): the revised desktop/mobile mockup is approved as the Phase U1 design baseline, including the centered responsive card, smaller Share glyph, consistent collapsible sections, numerical progress, cancellation, and subtle storage-protection feedback. This completes mockup design review; production implementation, lifecycle validation, and physical-device acceptance remain outstanding. No commit, push, or deployment is implied.
+Design-review artifact (2026-09-13): `fly-washington/docs/mockups/offline-access.html` is a self-contained interactive desktop/mobile mockup, with scenario controls and usage notes in its adjacent README. It demonstrates layout and simulated feedback only; production download/storage behavior is unchanged. Feedback revision (2026-09-19): one non-modal map card now serves first use and the persistent Offline access control on both layouts; installation help remains available, granted protection is hidden, and exception details expand on demand. Owner approval (2026-09-19): the revised desktop/mobile mockup is approved as the Phase U1 design baseline, including the centered responsive card, smaller Share glyph, consistent collapsible sections, numerical progress, cancellation, and subtle storage-protection feedback. This completes mockup design review. The owner subsequently authorized implementation: core 0.6.0 now contains the card, numeric progress, automatic persistence checks, bounded standalone setup, and renderer recovery; Fly Washington supplies installation guidance and consumes the new tarball. Automated validation: core typecheck/lint/build, 27 unit tests, and all 11 browser scenarios passed, with the three affected UI scenarios rerun after the final context change. App checks and desktop/mobile Chromium full-map cold-offline tests passed; WebKit UI passed, while its existing internal cold-navigation exception remains a documented skip. Detailed evidence is in the app development notes; physical-device acceptance remains outstanding. No commit, push, or deployment is implied.
 
 1. Follow the approved desktop/mobile mockups and Section 32.3 browser/PWA policy for first use, deferred setup, progress, verification, installed, failed, and missing-package states. Resolve the installed-app delete-control report using the actual final download status/build before assigning a cause.
 2. Core: implement one readiness/state model, persistence rechecking, owned renderer-error recovery, and serialized/coalesced lifecycle refreshes; retain IndexedDB and current verification/update safety.
@@ -2980,20 +2980,20 @@ The following rules should remain easy to find because violating one generally i
 
 # 78. Immediate Next Steps
 
-Continue from the implemented MapLibre/PMTiles system and committed core 0.5.1 marker-gesture fix. The owner reports the application deployed and has confirmed desktop/mobile gestures locally; this is not complete installed-PWA offline acceptance. The next work is the planned Phase U1, not another renderer or storage migration.
+Continue from the implemented MapLibre/PMTiles system and committed core 0.5.1 marker-gesture fix. The owner reports the application deployed and has confirmed desktop/mobile gestures locally; this is not complete installed-PWA offline acceptance. Phase U1 is implemented locally in core 0.6.0; the next work is physical installed-PWA acceptance and review of the uncommitted implementation, not another renderer or storage migration.
 
 ## `core-passport`
 
-1. Use the approved responsive Offline access design recorded in Phase U1 and the browser-manual/PWA-automatic direction in Section 32.3 as the implementation baseline.
-2. Implement persistence rechecking, coherent readiness/renderer recovery, and visible setup/progress/maintenance actions through reusable core modules.
-3. Add independent Section 58.2 regressions; preserve integrity, update/rollback, deletion isolation, and all Section 16.2 product behavior.
-4. Package a new core version only after checks; do not overwrite the committed 0.5.1 archive to ship these changes.
+1. Validate the implemented core 0.6.0 Offline access flow against the approved design on physical devices.
+2. Retain the implemented persistence rechecking, renderer recovery, and reusable setup/progress UI; address any defects found during device acceptance.
+3. Maintain the independent Section 58.2 regressions and extend them for device findings; preserve integrity, update/rollback, deletion isolation, and all Section 16.2 product behavior.
+4. Review the new 0.6.0 package after checks and device acceptance; the committed 0.5.1 archive remains intact.
 
 ## `fly-washington`
 
 1. Reproduce the reported Chrome iOS 26 installed-app warning/delete inconsistency, recording build, URL, standalone context, and final download status. Keep browser-to-PWA storage separation distinct from an actual failed installation.
 2. Integrate app-owned installation guidance and shell/build diagnostics with the reusable UI. Continue release-assets distribution and current Washington package; no archive regeneration is needed for this UX work.
-3. Update the versioned core tarball and lockfile together; build/test without a sibling checkout. Rebuild the production preview served at port 5173 before physical testing.
+3. The new 0.6.0 tarball and lockfile are integrated, and the production preview at port 5173 is rebuilt. Continue to build/test from the packaged dependency without requiring a sibling checkout.
 4. Complete physical installed-app offline startup, unseen-area zoom, numerical progress/recovery/cancellation, internal cleanup safety, and visit transfer acceptance. Record remaining browser limitations honestly.
 
 ## Directly affected documentation follow-up

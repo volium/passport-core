@@ -3,7 +3,7 @@ import type { OfflineMapPackage } from '../contracts.js';
 
 export const CHUNK_BYTES = 1024 * 1024;
 export interface InstalledMap { generation: string; package: OfflineMapPackage }
-export interface MapInventory { active?: InstalledMap; previous?: InstalledMap }
+export interface MapInventory { active?: InstalledMap; previous?: InstalledMap; control?: { attempt?: string; persistenceRequests?: string[] } }
 interface MapDatabase extends DBSchema {
   chunks: { key: [string, string, number]; value: Uint8Array };
   inventory: { key: string; value: MapInventory };
@@ -34,7 +34,7 @@ export class IndexedMapStorage implements MapStorage {
   async activate(next: InstalledMap) {
     const tx = (await this.open()).transaction('inventory', 'readwrite');
     const old = await tx.store.get('installed');
-    await tx.store.put({ active: next, previous: old?.active }, 'installed');
+    await tx.store.put({ ...old, active: next, previous: old?.active }, 'installed');
     await tx.done;
   }
   async write(generation: string, resource: string, index: number, bytes: Uint8Array) {

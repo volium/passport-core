@@ -4,7 +4,7 @@ import { PMTiles, type Source } from 'pmtiles';
 import { packageBytes, validateMapPackage, type OfflineMapPackage } from '../contracts.js';
 import { CHUNK_BYTES, type InstalledMap, type MapStorage, type MapInventory } from './storage.js';
 
-export type MapState = 'not-downloaded' | 'checking' | 'downloading' | 'installed' | 'insufficient-storage' | 'failed' | 'integrity-failed' | 'missing';
+export type MapState = 'waiting' | 'cancelled' | 'verifying' | 'not-downloaded' | 'checking' | 'downloading' | 'installed' | 'insufficient-storage' | 'failed' | 'integrity-failed' | 'missing';
 export interface OfflineMapStatus {
   state: MapState; active?: InstalledMap; rollbackAvailable: boolean; updateAvailable: boolean; downloaded: number; total: number; reclaimedBytes: number;
   persistence: 'granted' | 'not-granted' | 'unavailable'; error?: string;
@@ -13,12 +13,16 @@ export interface MapEnvironment {
   fetch: typeof fetch;
   estimate?: () => Promise<{ quota?: number; usage?: number }>;
   persist?: () => Promise<boolean>;
+  persisted?: () => Promise<boolean>;
+  persistenceContext?: () => 'browser' | 'standalone';
   lock: <T>(name: string, action: () => Promise<T>) => Promise<T>;
 }
 export function browserMapEnvironment(): MapEnvironment {
   return {
     fetch: (...args) => fetch(...args),
     estimate: navigator.storage?.estimate ? () => navigator.storage.estimate() : undefined,
+    persistenceContext: () => matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & {standalone?:boolean}).standalone === true ? 'standalone' : 'browser',
+    persisted: navigator.storage?.persisted ? () => navigator.storage.persisted() : undefined,
     persist: navigator.storage?.persist ? () => navigator.storage.persist() : undefined,
     lock: async (name, action) => {
       if (!navigator.locks) return Promise.reject(new Error('This browser cannot safely coordinate map downloads. Passport functions remain available.'));
@@ -30,6 +34,9 @@ class IntegrityError extends Error {}
 export class OfflineMapManager {
   status: OfflineMapStatus;
   private abort?: AbortController;
+  private checking?: Promise<void>;
+  private protectionCheck?: Promise<void>;
+  private closed = false;
   private channel?: BroadcastChannel;
   private listeners = new Set<(status: OfflineMapStatus) => void>();
   constructor(readonly programId: string, readonly advertised: OfflineMapPackage, readonly storage: MapStorage, private env: MapEnvironment) {
@@ -42,6 +49,7 @@ export class OfflineMapManager {
   }
   subscribe(fn: (status: OfflineMapStatus) => void) { this.listeners.add(fn); fn(this.status); return () => this.listeners.delete(fn); }
   private emit(value: Partial<OfflineMapStatus>) {
+    if (this.closed) return;
     this.status = { ...this.status, ...value }; this.listeners.forEach(fn => fn(this.status));
   }
   private lock<T>(action: () => Promise<T>) { return this.env.lock(`passport-map:${this.programId}:${this.advertised.id}`, action); }
@@ -80,7 +88,38 @@ export class OfflineMapManager {
     if (Math.abs(header.minLon-b.west)>1e-7 || Math.abs(header.maxLon-b.east)>1e-7 || Math.abs(header.minLat-b.south)>1e-7 || Math.abs(header.maxLat-b.north)>1e-7) throw new IntegrityError('Archive coverage differs from manifest');
     if (header.specVersion !== 3 || header.tileType !== 1 || header.minZoom !== (installed.package.minZoom ?? 0) || header.maxZoom !== installed.package.maxNativeZoom) throw new IntegrityError('Map archive format or zoom does not match its manifest');
   }
-  async check() {
+  async protection(request = false) {
+    if (this.protectionCheck) return this.protectionCheck;
+    this.protectionCheck = this.lock(() => this.readProtection(request)).catch(() => this.emit({persistence:'unavailable'})).finally(() => { this.protectionCheck = undefined; });
+    return this.protectionCheck;
+  }
+  private async readProtection(request: boolean) {
+    let persistence: OfflineMapStatus['persistence'] = 'unavailable';
+    try {
+      if (this.env.persisted) persistence = await this.env.persisted() ? 'granted' : 'not-granted';
+      if (request && persistence !== 'granted' && this.env.persist) {
+        const inventory = await this.storage.inventory();
+        const context = this.env.persistenceContext?.() ?? 'browser';
+        const requests = inventory.control?.persistenceRequests ?? [];
+        if (!requests.includes(context)) {
+          await this.storage.setInventory({...inventory,control:{...inventory.control,persistenceRequests:[...requests,context]}});
+          persistence = await this.env.persist() ? 'granted' : 'not-granted';
+        }
+      }
+    } catch { persistence = 'unavailable'; }
+    this.emit({persistence});
+  }
+  async prepare(standalone: boolean, online: boolean) {
+    await this.check();
+    if (this.closed || this.abort || !standalone || this.status.active || !['not-downloaded','waiting'].includes(this.status.state)) return;
+    if (!online) { this.emit({state:'waiting'}); return; }
+    await this.download(true);
+  }
+  check() {
+    if (this.closed || this.abort) return Promise.resolve();
+    return this.checking ??= this.checkInventory().finally(() => { this.checking = undefined; });
+  }
+  private async checkInventory() {
     if (this.abort) return;
     this.emit({ state: 'checking', error: undefined });
     try {
@@ -93,25 +132,40 @@ export class OfflineMapManager {
         }
         const reclaimedBytes = await this.storage.clean([inventory.active?.generation, inventory.previous?.generation].filter((v): v is string => !!v));
         if (reclaimedBytes) this.emit({ reclaimedBytes });
-        this.emit({ state: inventory.active ? 'installed' : 'not-downloaded', active: inventory.active, updateAvailable: !!inventory.active && inventory.active.package.version !== this.advertised.version });
+        this.emit({ state: inventory.active ? 'installed' : inventory.control?.attempt === 'cancelled' ? 'cancelled' : inventory.control?.attempt === 'installed' ? 'missing' : inventory.control?.attempt ? 'failed' : 'not-downloaded', active: inventory.active, updateAvailable: !!inventory.active && inventory.active.package.version !== this.advertised.version });
       });
     } catch (error) { this.emit({ state: 'failed', active: undefined, error: String(error) }); }
   }
-  close() { this.cancel(); this.channel?.close(); this.listeners.clear(); }
-  cancel() { this.abort?.abort(); }
-  async download() {
-    if (this.abort) return;
+  close() { this.closed = true; this.abort?.abort(); this.channel?.close(); this.listeners.clear(); }
+  cancel() {
+    if (this.abort) { this.abort.abort(); return; }
+    if (this.status.state === 'waiting') {
+      this.emit({state:'cancelled'});
+      void this.lock(async () => {
+        const inventory = await this.storage.inventory();
+        await this.storage.setInventory({...inventory,control:{...inventory.control,attempt:'cancelled'}});
+        this.channel?.postMessage('changed');
+      }).catch(() => this.emit({state:'failed',error:'Cancellation could not be saved. Keep this app closed until ready to download.'}));
+    }
+  }
+  async download(automatic = false) {
+    if (this.closed || this.abort) return;
     const abort = this.abort = new AbortController();
     const installed = { generation: Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2,'0')).join(''), package: structuredClone(this.advertised) };
     this.emit({ state: 'downloading', downloaded: 0, error: undefined });
     try {
       await this.lock(async () => {
         abort.signal.throwIfAborted();
-        let persistence: OfflineMapStatus['persistence'] = 'unavailable';
-        if (this.env.persist) { try { persistence = await this.env.persist() ? 'granted' : 'not-granted'; } catch { persistence = 'not-granted'; } }
-        this.emit({ persistence });
+        const inventory = await this.storage.inventory();
+        // Recheck under the same cross-tab lock as activation. Never duplicate an automatic transfer.
+        if (automatic && (inventory.active || inventory.control?.attempt)) {
+          this.emit({state:inventory.active?'installed':'failed',active:inventory.active}); return;
+        }
+        try { await this.storage.setInventory({...inventory,control:{...inventory.control,attempt:'interrupted'}}); }
+        catch (error) { if (automatic) throw new Error('Automatic download could not be remembered. Use Download map to try manually.', {cause:error}); }
+        await this.readProtection(true);
         const estimate = await this.env.estimate?.().catch((): { quota?: number; usage?: number } => ({}));
-        if (estimate?.quota !== undefined && estimate.usage !== undefined && estimate.quota-estimate.usage < this.status.total * 1.15 + 2*CHUNK_BYTES) throw new DOMException('Not enough space for a complete replacement. Keep your current map or delete it explicitly.', 'QuotaExceededError');
+        if (estimate?.quota !== undefined && estimate.usage !== undefined && estimate.quota-estimate.usage < this.status.total * 1.15 + 2*CHUNK_BYTES) throw new DOMException('Not enough space for a complete replacement. Free some device space and retry; your current map is retained.', 'QuotaExceededError');
         for (const resource of [{ id: 'archive', url: this.advertised.url, sizeBytes: this.advertised.sizeBytes, sha256: this.advertised.sha256 }, ...this.advertised.resources]) {
           abort.signal.throwIfAborted();
           const response = await this.env.fetch(resource.url, { signal: abort.signal, cache: 'no-store' });
@@ -135,9 +189,12 @@ export class OfflineMapManager {
           if (used) await this.storage.write(installed.generation, resource.id, index, buffer.slice(0,used));
           if (received !== resource.sizeBytes || hash.digest() !== resource.sha256) throw new IntegrityError('Map integrity check failed. Retry the complete download.');
         }
+        this.emit({state:'verifying'});
         abort.signal.throwIfAborted(); await this.verify(installed); abort.signal.throwIfAborted();
         const before = await this.storage.inventory();
         await this.storage.activate(installed);
+        const activated = await this.storage.inventory();
+        await this.storage.setInventory({...activated,control:{...activated.control,attempt:'installed'}});
         try { await new PMTiles(this.source(installed)).getHeader(); }
         catch (error) { await this.storage.setInventory(before); throw error; }
         this.emit({ state: 'installed', active: installed, rollbackAvailable: !!before.active, updateAvailable: false });
@@ -151,7 +208,8 @@ export class OfflineMapManager {
       if (active.active?.generation !== installed.generation) await this.storage.remove(installed.generation).catch(() => {});
       let retained = active.active;
       if (retained) { try { await this.verify(retained); } catch { retained = undefined; } }
-      this.emit({ state: error instanceof IntegrityError ? 'integrity-failed' : error instanceof DOMException && error.name === 'QuotaExceededError' ? 'insufficient-storage' : 'failed', active: retained, error: abort.signal.aborted ? 'Download interrupted. Retry when ready.' : String(error) });
+      if (abort.signal.aborted) await this.lock(async () => { const value = await this.storage.inventory(); await this.storage.setInventory({...value,control:{...value.control,attempt:'cancelled'}}); }).catch(() => {});
+      this.emit({ state: abort.signal.aborted ? 'cancelled' : error instanceof IntegrityError ? 'integrity-failed' : error instanceof DOMException && error.name === 'QuotaExceededError' ? 'insufficient-storage' : 'failed', active: retained, error: abort.signal.aborted ? 'Download interrupted. Retry when ready.' : String(error) });
     } finally { this.abort = undefined; }
   }
   async rollback() {
@@ -159,13 +217,13 @@ export class OfflineMapManager {
       const inventory = await this.storage.inventory();
       if (!inventory.previous) throw new Error('No retained map version is available');
       await this.verify(inventory.previous);
-      await this.storage.setInventory({ active: inventory.previous, previous: inventory.active });
+      await this.storage.setInventory({ ...inventory, active: inventory.previous, previous: inventory.active });
     }); this.channel?.postMessage('changed'); await this.check();
   }
   async delete() {
     if (this.abort) { this.cancel(); return; }
     try {
-      await this.lock(async () => { await this.storage.setInventory({}); this.emit({ reclaimedBytes: await this.storage.clean([]) }); });
+      await this.lock(async () => { const inventory = await this.storage.inventory(); await this.storage.setInventory({control:{...inventory.control,attempt:'deleted'}}); this.emit({ reclaimedBytes: await this.storage.clean([]) }); });
       this.channel?.postMessage('changed');
       this.emit({ state: 'not-downloaded', active: undefined, rollbackAvailable: false, updateAvailable: false, downloaded: 0, error: undefined });
     } catch (error) { this.emit({ state: 'failed', error: `Map deletion failed: ${String(error)}` }); }

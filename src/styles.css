@@ -149,3 +149,28 @@ progress::-moz-progress-bar { background: var(--region, #438262); }
 .airport-map-label { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); white-space: nowrap; pointer-events: none; }
 .airport-map-hit:hover .airport-map-label, .airport-map-hit:focus-visible .airport-map-label { display: block !important; }
 @media(max-width: 760px) { .maplibregl-ctrl-top-right { display: none; } }
+
+/* Offline readiness is independent of Explore/My passport and stays visible at phone widths. */
+.passport-app { grid-template-rows: auto auto minmax(0,1fr); }
+.offline-navigation { display:flex; align-items:center; gap:8px; padding:4px 16px 8px; border-bottom:1px solid var(--border); background:var(--surface); }
+.offline-navigation button { border:0; background:transparent; text-align:left; font-size:12px; }
+#offline-access { display:grid; gap:5px; flex:1; max-width:460px; }
+#storage-protection { margin-left:auto; color:var(--muted); }
+#storage-protection svg { width:16px; height:19px; vertical-align:middle; }
+.offline-card { position:absolute; top:150px; left:50%; transform:translateX(-50%); z-index:1050; width:min(480px,calc(100% - 32px)); max-height:calc(100% - 166px); overflow:auto; overscroll-behavior:contain; border:1px solid var(--border); border-radius:14px; background:var(--surface); color:var(--text); padding:20px; box-shadow:0 12px 48px #0003; }
+.offline-card-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; position:sticky; top:-20px; z-index:1; background:var(--surface); padding:8px 0; }
+.offline-card-heading h2 { font-size:20px; }
+.offline-card p,.offline-card li { font-size:13px; line-height:1.6; }
+.offline-card p { margin:8px 0; }
+.offline-muted { color:var(--muted); }
+.offline-box { border:1px solid var(--border); border-radius:10px; padding:15px; margin:14px 0; }
+.offline-setup { background:var(--soft); border:0; }
+.offline-disclosure { margin-top:14px; font-size:13px; }
+.offline-disclosure summary { cursor:pointer; min-height:44px; padding:12px 0; }
+.offline-disclosure ol { padding-left:20px; }
+.offline-row { padding:12px 0; font-size:13px; border-bottom:1px solid var(--border); }
+.share-icon { display:inline-block; width:16px; height:19px; vertical-align:middle; margin:0 4px; }
+.offline-navigation progress,.offline-card progress { width:100%; height:4px; border:0; border-radius:8px; overflow:hidden; accent-color:var(--accent); }
+@media(max-width:760px) { .offline-navigation { padding:4px 8px 8px; } .offline-card { padding:16px; } .offline-card-heading { top:-16px; } }
+
+#map-download, #map-replace { background:#256b53; color:white; border-color:#256b53; }

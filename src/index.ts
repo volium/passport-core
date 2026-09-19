@@ -10,3 +10,5 @@ export type { MapStorage, InstalledMap } from './map/offline/storage.js';
 export type { PassportProgram, AirportDefinition, RegionDefinition, StampLocationDefinition, CheckIn, CompletionRule, AirportFilters, PassportBackup } from './models.js';
 export type { MapEnvironment, OfflineMapStatus, MapState } from './map/offline/manager.js';
 export { validateStyleResources } from './map/resources.js';
+
+export type { InstallationGuidance } from './offline-access.js';

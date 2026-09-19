@@ -61,7 +61,7 @@ export class PassportMap {
     this.overlay=document.createElement('div');this.overlay.className='passport-map-overlays';this.map.getCanvasContainer().append(this.overlay);
     this.map.on('move',()=>this.position());
     this.map.on('style.load',()=>this.layers());
-    this.map.on('idle',()=>{ if (this.styleKey && !this.styleFailed) container.dataset.basemapState = 'ready'; });
+    this.map.on('idle',()=>{ if (this.styleKey && !this.styleFailed) { container.dataset.basemapState = 'ready'; this.error(''); } });
     this.map.on('error',()=>{ this.styleFailed = true; container.dataset.basemapState = 'unavailable'; error('Basemap unavailable. Airport markers, list, and passport remain usable.'); });
   }
   static async create(container:HTMLElement,center:LatLon,zoom:number,manager:OfflineMapManager,select:(airport:AirportDefinition)=>void,error:(message:string)=>void) {
@@ -80,7 +80,7 @@ export class PassportMap {
     if (this.manager.status.state === 'checking' && !this.manager.status.active) return;
     const active=this.manager.status.active;const p=active?.package??this.manager.advertised;
     const key=`${active?.generation??'online'}:${p.version}:${theme}`;
-    if(key===this.styleKey || key===this.pendingStyleKey)return;const request=++this.styleRequest;
+    if((key===this.styleKey && !this.styleFailed) || key===this.pendingStyleKey)return;const request=++this.styleRequest;
     this.pendingStyleKey = key;
     try {
       const id=theme==='dark'?p.darkStyleResourceId:p.lightStyleResourceId;
@@ -99,7 +99,7 @@ export class PassportMap {
       this.container.dataset.basemapMode = active ? 'offline' : 'online';
       this.styleFailed = false;
       this.styleKey=key;this.map.setStyle(style,{diff:false});
-    } catch { this.container.dataset.basemapState = 'unavailable'; this.error('Basemap resources are unavailable. Download the map when connected; airport and passport functions remain available.'); }
+    } catch { if(request!==this.styleRequest)return; this.styleFailed=true; this.container.dataset.basemapState = 'unavailable'; this.error('Basemap resources are unavailable. Download the map when connected; airport and passport functions remain available.'); }
     finally { if (request === this.styleRequest) this.pendingStyleKey = undefined; }
   }
   private layers() {
