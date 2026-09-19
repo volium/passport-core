@@ -1,10 +1,10 @@
 # Aviation Passport Platform
 
-> Implementation update (2026-09-12, unpublished working tree): core 0.5.0 and the consuming app now contain the MapLibre/PMTiles renderer and verified offline-package lifecycle described below. See [core API/storage documentation](docs/OFFLINE-MAPS.md) and the app's `docs/OFFLINE-MAPS.md` for measured package sizes, validation, and remaining release gates. The Leaflet/CARTO release record below describes the pre-migration released baseline. Washington z12 is the implementation candidate; actual package endpoint deployment and physical-device acceptance are still pending. No commit, push, or deployment is implied by this status.
+> Implementation update (2026-09-13): the owner reports the MapLibre/PMTiles application deployed and working. Core 0.5.1 and the consuming tarball include the marker wheel/pinch fix, confirmed locally on desktop and mobile and committed in both repositories. Deployment of that patch is not inferred. Offline onboarding and readiness improvements below are planned only; reported installed-PWA download/status inconsistencies remain unresolved. Earlier release records are historical, not current readiness claims.
 
 ## Architecture, Requirements, and Implementation Plan
 
-**Status:** Unpublished core 0.5.0 implements MapLibre GL JS/PMTiles offline maps with the full Washington roster in the app. Local automated validation is recorded in the implementation documents; deployed-package and physical-device acceptance remain pending (2026-09-12). Core 0.4.5 is the historical Leaflet/CARTO released baseline.
+**Status:** MapLibre/PMTiles and chunked IndexedDB offline packages are implemented. This documentation update plans the next offline UX work before implementation. Section 32.3 records the proposed browser-manual/PWA-automatic setup direction; Sections 32.4-32.5, 34.1, 58.2, and Phase U1 define feedback, recovery, installed-app behavior, and acceptance. No implementation, commit, or deployment is authorized by this planning record alone.
 
 **Primary repositories:** `passport-core` (called `core-passport` below), `fly-washington`
 
@@ -12,15 +12,15 @@
 
 ## Approved offline-map architecture update — 2026-09-12
 
-MapLibre GL JS will replace Leaflet. A program-owned, self-hosted PMTiles archive of the OpenStreetMap-derived Protomaps basemap will supply the same basemap online and offline, with local light/dark styling. Fly Washington will no longer require CARTO, an API key, or a hosted-provider selector. GitHub Pages remains the deployment target; no backend or tile server is introduced.
+MapLibre GL JS has replaced Leaflet in the implemented migration. A program-owned, self-hosted PMTiles archive of the OpenStreetMap-derived Protomaps basemap will supply the same basemap online and offline, with local light/dark styling. Fly Washington no longer requires CARTO, an API key, or a hosted-provider selector. GitHub Pages remains the deployment target; no backend or tile server is introduced.
 
 The shared core owns rendering, PMTiles integration, package contracts, storage abstractions, lifecycle, readiness UI, and default styling. Fly Washington owns the Washington extract, coverage, independent map versions, generation/release process, and visual overrides. Airport/passport data and user visits remain separate from the basemap.
 
-The unpublished implementation now includes MapLibre rendering, verified downloads, persistence requests, and offline-map status UI. Sections 16–17 and 32–34 remain the architectural requirements; Section 70 records the migration sequence. The required z9–z13 experiment produced measured archive sizes of 9,237,767; 18,741,196; 36,902,403; 81,779,500; and 191,831,101 bytes respectively. Z12 is the implementation candidate, with 11,230,824 additional resource bytes. These measurements supersede the original z11/z12 and sub-100 MB expectations, without resolving physical-device or deployment gates. The app's map release record contains provenance, commands, comparison evidence, and remaining acceptance work.
+The implemented migration includes MapLibre rendering, verified downloads, persistence requests, and offline-map status UI. Sections 16–17 and 32–34 remain the architectural requirements; Section 70 records the migration sequence. The required z9–z13 experiment produced measured archive sizes of 9,237,767; 18,741,196; 36,902,403; 81,779,500; and 191,831,101 bytes respectively. Z12 is the implementation candidate, with 11,230,824 additional resource bytes. These measurements supersede the original z11/z12 and sub-100 MB expectations. The owner subsequently reported deployment; complete installed-PWA acceptance remains open and is not implied by desktop/mobile gesture acceptance. The app's map release record contains provenance, commands, comparison evidence, and remaining acceptance work.
 
 ## Historical pre-migration release record
 
-The following release notes describe the released Leaflet system before the unpublished 0.5.0 migration. Their renderer/provider details are historical; their product behavior remains required.
+The following release notes describe the released Leaflet system before the 0.5.0 migration. Their renderer/provider details are historical; their product behavior remains required.
 
 Core 0.4.2: approved legend uses equal-sized hollow/filled CSS circles inside the existing rounded box; Export/Import controls share typography, sizing, and alignment. Single-provider map errors no longer suggest switching styles. At this milestone, Fly Washington switched to CARTO only, with its existing key and native light/dark appearance. The implemented core retains program-configured raster-provider support.
 
@@ -44,7 +44,7 @@ The first runnable slice now spans both independent repositories. The long-term 
 
 - Core: TypeScript package `@passport/core` 0.4.5, public models/API, program validation, viewport-height explorer and My passport panel, Leaflet map with selectable styles, synchronized selection and alias-aware filters, IndexedDB schema v1, date-only visits, notes/edit/delete, regional progress, and validated JSON restore. Optional airport reference fields support identifiers, addresses, runways, cautions, and dated source links.
 - App: full 115-airport program-map roster in seven regions, matched uniquely to OurAirports, 153 runway records, source stamp instructions including genuine multiple locations, deterministic generation and reconciliation report, light/dark/system appearance, PWA caching, and gated Pages workflow. The original five airport IDs are preserved. Source coordinates remain distinct from precise GPS targets.
-- Maps (current implementation only): Fly Washington uses Leaflet with CARTO light/dark raster tiles and a dedicated Basemaps key. Core accepts program-configured providers. The worker does not cache or prefetch map tiles. Offline airport/passport functions are available after the production shell is cached; this implementation has no complete offline basemap. The approved replacement must provide first offline startup with a usable basemap after explicit package installation, as specified in Sections 32–33.
+- Maps (historical implementation at this milestone): Fly Washington uses Leaflet with CARTO light/dark raster tiles and a dedicated Basemaps key. Core accepts program-configured providers. The worker does not cache or prefetch map tiles. Offline airport/passport functions are available after the production shell is cached; this implementation has no complete offline basemap. The approved replacement must provide first offline startup with a usable basemap after explicit package installation, as specified in Sections 32–33.
 - Package workflow: the app consumes a checked-in versioned core tarball, so app builds do not require an adjacent checkout. `npm run core:pack` explicitly refreshes local changes. Publishing to a registry is deferred.
 - Tests: core domain/storage tests and app configuration tests pass. Desktop/mobile Chromium and mobile WebKit cover the main workflow; Chromium also passes offline reload/save. Remote CI failed in WebKit offline reload with the same internal navigation error seen locally. The app now tests open-app offline saving separately on every browser and conditionally skips only that exact WebKit offline reload error after checking service-worker control and cached HTML. Physical iPhone offline startup verification and a successful remote rerun remain open. See app handoff notes for details.
 - Coordinate review: the owner approved the program map position for Copalis and the OurAirports position for Port of Whitman. Both source disagreements remain documented as resolved in the app's reconciliation report; missing region values use their source map layers.
@@ -209,7 +209,7 @@ The initial architecture does **not** include a required `passport-backend` serv
 
 Cloud functionality may be added later as an optional adapter or enhancement, but the application must not depend on it.
 
-Cache the small application shell and program data independently. A complete basemap is a separate explicit user download, including every required local rendering resource. Shell, program data, user data, and basemap readiness must be reported separately. An absent map package must not prevent airport/passport use (Sections 32–34).
+Cache the small application shell and program data independently. A complete basemap is installed through the discoverable setup flow in Section 32.3, including every required local rendering resource. Section 32.3 defines manual browser download and bounded automatic standalone preparation; the UX must not rely on finding a maintenance button in My passport. Shell, program data, user data, and basemap readiness must be reported separately. An absent map package must not prevent airport/passport use (Sections 32–34).
 
 ---
 
@@ -512,7 +512,7 @@ Example:
 ```json
 {
   "dependencies": {
-    "@passport/core": "file:vendor/passport-core-0.4.5.tgz"
+    "@passport/core": "file:vendor/passport-core-0.5.1.tgz"
   }
 }
 ```
@@ -887,7 +887,7 @@ Online without an installed package, read necessary PMTiles byte ranges from sta
 ## 16.2 Renderer migration must preserve product behavior
 
 - Fit participating airports to the measured initial viewport with marker/control padding and the existing quarter-step zoom precision. Show all matches uses the same fit logic; later navigation stays under user control. Verify equivalent visible bounds in MapLibre rather than depending on Leaflet internals.
-- Preserve region-colored hollow/filled visited markers, selected outlines, responsive marker/legend sizes, and completed-region styling. Keep selected markers and labels above ordinary ones; Leaflet panes are the current mechanism, not a target dependency.
+- Preserve region-colored hollow/filled visited markers, selected outlines, responsive marker/legend sizes, and completed-region styling. Keep selected markers and labels above ordinary ones; Leaflet panes were the historical mechanism; MapLibre layers and accessible overlay controls now provide this behavior.
 - Keep FAA identifier display with stable-ID fallback, accessible marker names, compact/detail behavior, and viewport spacing rules for labels. Preserve the selected label in crowded views and recalculate general label visibility after panning/zooming.
 - Empty-map clicks clear selection and close details without changing view or visit state. Dragging/zooming preserve selection; another marker switches it. Mobile marker taps open the compact preview with an explicit View details action; list and desktop selections open details directly.
 - Preserve filters, matching counts, map/list synchronization, desktop anchored-map layout, mobile Map/List restoration, Explore/My passport tabs, focus management, keyboard operation, and non-color state indicators.
@@ -994,7 +994,7 @@ Show archive size, total required resource size, and additional download/storage
 
 Reject missing/duplicate IDs, empty versions, unsafe or unresolved URLs, invalid checksums, nonpositive archive sizes, invalid resource sizes, malformed or reversed bounds, out-of-range coordinates, noninteger or reversed zoom ranges, incompatible schemas/styles, missing attribution/licenses, and missing resource references. Validate overrides and their entire resource dependency set. CI must fail malformed program configuration; runtime errors remain actionable without damaging passport records.
 
-The current `tileUrl`, `darkTileUrl`, and raster `styles` contract belongs to Leaflet. Document its compatibility/deprecation path in the new core release, then remove the app's obsolete configuration after migration coverage passes. Retire saved provider preferences with a deterministic fallback to the default PMTiles style while preserving appearance preference and passport data. A future `BasemapProvider` extension may support hosted providers; implementing multiple providers or a provider selector is not required for this migration.
+The historical `tileUrl`, `darkTileUrl`, and raster `styles` contract belonged to Leaflet. Document its compatibility/deprecation path in the new core release, then remove the app's obsolete configuration after migration coverage passes. Retire saved provider preferences with a deterministic fallback to the default PMTiles style while preserving appearance preference and passport data. A future `BasemapProvider` extension may support hosted providers; implementing multiple providers or a provider selector is not required for this migration.
 
 ---
 
@@ -1344,7 +1344,7 @@ Migration tests should be added when schema versions change.
 
 # 32. Offline Requirements
 
-After the small application shell and program data have been cached, the application must provide its core functionality without Internet access. After the user explicitly downloads and installs the complete program map package, the map must also be usable on the first offline launch, including areas never previously viewed within the package coverage. Installation of a PWA alone must not trigger a large map download.
+After the small application shell and program data have been cached, the application must provide its core functionality without Internet access. After the complete program map package is installed through Section 32.3, the map must also be usable on the first offline launch, including areas never previously viewed within the package coverage. The installation event alone must not trigger a map download; first eligible standalone launch follows Section 32.3 independently of shell precaching.
 
 Offline capabilities include:
 
@@ -1388,19 +1388,66 @@ Installation state, update status, and persistence status are separate dimension
 | Downloading | Show received bytes and percentage when total is known; allow Cancel. |
 | Installed / available offline | Complete validated package and required resources are currently readable locally. |
 | Update available | Advertised version differs; offer Update and keep the usable installed version active. |
-| Insufficient storage | Explain needed space and offer retry or explicit map deletion; retain the working version. |
+| Insufficient storage | Explain needed space and offer Retry after space is freed; retain the working map. Do not make deleting the active map the normal remedy. |
 | Download interrupted or failed | Offer Retry; staged bytes do not count as installed. |
 | Integrity check failed | Reject the candidate, explain failure, and offer a clean retry. |
 | Missing or evicted | Previously installed bytes/resources are absent; return to download required and offer redownload. |
 | Persistence granted / not granted / unavailable | Report storage protection separately; it does not prove package presence. |
 
-Provide concise accessible status text, keyboard-operable Download/Cancel/Retry/Update/Delete controls, and screen-reader progress/completion/error announcements without excessive repetition. Offline users can delete an installed map and see that a later download requires a connection. Missing basemap messages must not cover controls or prevent airport/list/passport use.
+Provide concise accessible status text, keyboard-operable Download/Cancel/Retry/Update controls, and screen-reader progress/completion/error announcements without excessive repetition. The planned normal UI does not offer deletion of a healthy installed map; core retains scoped removal for cleanup and recovery (Section 33.5). Missing basemap messages must not cover controls or prevent airport/list/passport use.
+
+## 32.3 Discoverable setup and download policy (planned direction)
+
+Owner direction (2026-09-13): browser tabs offer map download; an installed PWA starts its initial map download automatically with visible status and Cancel. On first mobile browser use, recommend home-screen installation and explain the platform-specific steps and storage implications before a large transfer. This supersedes the earlier undecided A-E comparison and the original migration's blanket exclusion of automatic large downloads only for the bounded standalone flow below. Implementation remains deferred until plan review is complete.
+
+- **First use on mobile and desktop:** open the same dismissible, non-modal Offline access card used by the persistent navigation control (Section 32.4): **For the best experience, add this app to your Home Screen.** Offer platform/browser-specific steps, **Download map in this browser**, and **Not now**. Show measured total transfer size and mobile-data implications before browser download. Use the same card on desktop, with guidance appropriate to the selected platform/browser. Dismissal is remembered in the current context; installation help remains accessible later. Do not block visits or force installation.
+- **Installation copy:** say **Open it there and the offline map (<total size in MB>) should start downloading automatically.** Derive the total from the manifest. Use **start downloading**, not **start preparing**, in user instructions. Pair the iOS Share-menu instruction with a recognizable square-and-up-arrow glyph and readable **Share** text; keep the glyph slightly smaller than the instruction line. It supplements the instruction and is decorative to screen readers. Retain connectivity, cancellation, and existing-package qualifications from this section.
+- **iOS explanation:** before the browser transfer, explain that its map and visit storage do not transfer into the home-screen app; download in the installed app to avoid a duplicate map transfer. Existing visits use export/import. Say home-screen use helps the browser grant storage protection, not that only PWAs have guaranteed storage. Query the actual persistence result in either context; do not hard-code a grant or denial by platform.
+- **Standalone first eligible launch:** check actual installed bytes and lifecycle metadata first. If a usable package exists, use it without another download, including an older valid version with an offered update. Otherwise start initial preparation automatically after configuration/capability/quota checks, without a separate confirmation tap. Detect the configured standalone display mode, with the iOS standalone fallback; an installation event alone is not a launch or readiness signal ([Google display-mode guidance](https://web.dev/learn/pwa/detection#detecting_display_mode)).
+- Show **Downloading offline map - <total size>**, current progress, and **Cancel** immediately next to the map/status entry point. Data may transfer over cellular; do not promise Wi-Fi-only detection. The current Washington package is 93,010,324 bytes including supporting files, excluding storage overhead. All displayed numbers must come from the program manifest, not a Washington constant in core.
+- **Offline first launch:** show Waiting for connection rather than a failed or installed state. Permit one deferred initial attempt when connectivity returns while the app is open and the user has not cancelled. Network events are hints; use actual request results. After a real failure, interruption, or integrity error, show an explicit Retry instead of an automatic retry loop. Do not promise continuation when the OS suspends the app or resumable partial downloads.
+- **Cancellation and maintenance removal:** persist suppression per program/package in the current context before starting an attempt, and record cancelled/deleted/interrupted states. A subsequent launch must not restart a cancelled transfer or immediately recreate a deliberately deleted map. Explicit Retry/Download clears suppression. If this small control-state storage cannot be written, offer manual download rather than risk repeated automatic transfers. Cross-tab operations must allow only one candidate and use the existing locks. Partial candidates remain uninstalled and are cleaned safely.
+- **Eviction:** if retained control metadata proves a previously installed package is now missing, offer recovery without a silent redownload. If the browser erased all origin data, the app cannot distinguish that from first use; in standalone mode a new initial automatic attempt may occur. State this limitation honestly; cancellation cannot survive deletion of all site data.
+- **Updates:** remain explicit, show size, and retain the current working version during replacement. Standalone startup does not imply automatic updates or repeated refresh downloads. The small shell precache stays independent of all map transfers.
+
+Core owns context-aware orchestration, scoped control state, persistence handling, and reusable setup/status UI. Program configuration supplies package identity, size, resources, and branding. App composition owns installation integration and may supply guidance through a narrow callback; no program-name checks, new backend, OPFS migration, or duplicated application-owned download logic are introduced.
+
+## 32.4 One visible offline entry point (planned)
+
+Replace the current connection-derived Local passport label with a keyboard/touch-operable **Offline access** control in the persistent application navigation on desktop and mobile. It must not disappear at the current 1,000px breakpoint. A compact mobile label may wrap or shorten presentation while preserving an accessible name and a visible text state; do not use a colored dot alone.
+
+Activation opens one dedicated, dismissible Offline access card, independent of Explore and My passport. First use opens this same card; later activation always provides the map status, actions, and browser installation help, even after onboarding was dismissed or a map was downloaded. Use it on desktop and mobile with bounded, scrollable content. Center the card horizontally within the application on desktop; let it move left as the window narrows while preserving side gutters on mobile. Place focus deliberately in the card; Close and Escape dismiss it and restore focus to its opener (the Offline access control for initial presentation). Do not trap focus in this non-modal card. Opening or closing it must preserve the active tab, map/list view, filters, selection, map position, and unfinished visit fields. It may temporarily cover part of the map when opened, but must not become a persistent gesture-obscuring error overlay.
+
+The control summarizes **map** state with qualified copy: Map not downloaded, Checking map, Downloading map (percentage), Verifying map, Map available offline, or Map needs attention. An installed working map with an update/failure retains its usable-map summary and a secondary update/error detail. Overall Offline ready may only be shown when shell, bundled program data, user storage, and the complete map are verified; map readiness alone must not imply cold app startup readiness.
+
+The expanded card contains separate plain-language rows for opening the app offline, airport information, saved visits, and the map package. Home Screen setup, Repair options, and Storage protection use consistent collapsible sections with matching disclosure indicators and keyboard/touch operation. Activating the heading toggles both open and closed; use action buttons for operations such as Download, Cancel, and Retry. Storage-protection exceptions have a collapsed explanation; granted protection needs no visible message. Network state is separate from all of these. Replace Local passport copy with **Visits are saved in this browser/app. Export a backup to transfer them.** Explain iOS storage separation where relevant. Do not show IndexedDB/OPFS implementation names in the normal user flow.
+
+### Storage protection indicator and declined requests
+
+Check storage protection automatically. When granted, hide the protection indicator and explanation; keep map readiness visible independently. Otherwise show a subtle shield button alongside Offline access on both layouts, with an accessible name and tooltip such as **Storage protection: Not protected** or **Storage protection: Unknown**. Clicking it opens the same Offline access card with the protection explanation expanded. Opening the map card normally leaves this explanation collapsed. Avoid alarming error styling merely because persistence was declined. Never label data permanently safe or guaranteed.
+
+Read persisted() automatically on opening and foreground checks. If not granted, make one automatic persist() request during initial setup in the current context, including browser users saving visits without downloading a map. No manual protection-check step is required. Remember that an attempt was made where storage permits; do not repeat declined requests on every launch or foreground event, or loop when attempt metadata cannot be saved. Unsupported/rejected checks are Unknown, not confirmed denial. A user-triggered retry after installation or changed browser settings is allowed without promising a grant.
+
+A declined request does not stop a viable map download or visit workflow. Explain **Your data is saved, but the browser may remove it to free space. Export your passport as a backup and check offline availability before travel.** Offer Export passport, installation help when in a browser tab, and a low-emphasis retry when supported. There is no universal browser setting that forces approval; do not send users to invented permission controls or suggest clearing site data. Storage-write denial or quota failure is a separate actionable error. Map redownload is recovery for replaceable assets, not protection for irreplaceable visits.
+
+On iOS, home-screen use is a factor in WebKit's persistence decision, not a guarantee and not evidence that browser tabs can never obtain it ([WebKit storage policy](https://webkit.org/blog/14403/updates-to-storage-policy/)). Both tabs and PWAs require actual checks, and users can still clear stored site data even when protected.
+
+## 32.5 Progress, completion, and recovery feedback (planned)
+
+- A tap or automatic standalone start must immediately show Starting/Downloading and expose adjacent status/progress and Cancel. Keep numerical progress visible in the persistent Offline access control on desktop and mobile while the user browses the map, list, or passport: for example **Map download 42%**, with a thin determinate progress bar. A remaining-MB label is an acceptable compact alternative. A spinner, icon, or generic Downloading label alone is insufficient once the manifest total is known. Expanded detail shows received/total MB and optionally remaining MB. Count archive plus supporting-file bytes, clamp displayed values, and avoid excessive decimal precision; use manifest totals and actual received bytes rather than elapsed-time guesses.
+- Separate network transfer from verification: at 100% received, show **Download complete - verifying map** until resources are checked, activated, and locally reopened. Do not fabricate a verification percentage or leave a misleading 100% Downloading state. Announce completion once; keep **Map available offline** visible after navigating away and returning. Never display a false installed state because a request started or reached 100%.
+- Group progress, status, and actions together at phone widths and enlarged text sizes. Keep the presentation subtle: compact navigation status, steady progress bar, no blocking modal, flashing indicator, repeated toast, or overlay obscuring map gestures. Cancel remains easy to reach from the progress control; cancelling stops only the current transfer and never removes a working installed map. Remove Delete map from the normal offline panel. Treat the basemap as a maintained part of the product, with **Retry** or **Repair map** only when needed; a repair must explain any full redownload and retain a usable version during replacement. Do not add an advanced delete menu in this iteration without a separate product decision.
+- Keep installed package availability, current renderer health, shell readiness, and persistence protection as separate state. A temporary online style failure must not erase a valid package or imply that visits failed. A renderer error after verified installation must say the saved map could not be displayed and offer a renderer retry, not automatically prescribe a full redownload.
+- Replace write-only generic basemap announcements with owned, reconciled map status. Clear a prior map warning only after the corresponding renderer/resource failure has recovered; do not clear unrelated save/import/storage errors. Ignore stale asynchronous results from earlier style/version requests. Retry a failed same-version style after recovery instead of treating its previous style key as successful. Preserve real missing-byte and unreadable-resource errors.
+- Read persisted() at startup/foreground checks through the core environment abstraction, separately from requesting persist() during setup. Report granted/denied/unavailable/rejected checks honestly; an unknown result is not a denial. Protection is not evidence of package presence or a backup. The APIs are distinct in the [Storage Standard](https://storage.spec.whatwg.org/#storagemanager).
+- Coalesce overlapping readiness checks so navigation/visibility events do not queue repeated full-package checks or overwrite a newer download/delete result. Retain complete integrity verification; performance tuning or OPFS migration requires separate evidence and planning.
+- Provide polite, throttled screen-reader progress announcements, clear completion/error announcements, and stable keyboard focus. A failure remains visible with an actionable reason. The earlier missing-delete report remains historical diagnostic evidence about the old UI; hiding that control in the new design must not conceal an unresolved install/status failure.
 
 ---
 
 # 33. Offline Map Package Architecture
 
-The approved V1 solution is a complete downloadable PMTiles package with all resources needed to render it. Opportunistic HTTP or service-worker tile caching is not the offline solution. The currently implemented Leaflet/CARTO limitations in the status record do not limit this target.
+The approved V1 solution is a complete downloadable PMTiles package with all resources needed to render it. Opportunistic HTTP or service-worker tile caching is not the offline solution. The historical Leaflet/CARTO limitations in the status record do not limit this implemented architecture.
 
 ## 33.1 Coverage and basemap contents
 
@@ -1430,7 +1477,7 @@ Protomaps documents self-hostable fontstack and sprite assets in [Basemaps for M
 
 ## 33.3 Download, verification, and activation
 
-1. Validate configuration and compare the advertised package version with any installed version. Show coverage, measured archive/resource bytes, and additional storage needed before explicit user initiation.
+1. Validate configuration and compare the advertised package version with any installed version. Show coverage, measured archive/resource bytes, and additional storage needed in the Section 32.3 setup flow before starting installation.
 2. Estimate available storage and request persistence where supported (Section 33.4). Budget for the existing working package, full candidate, additional resources, verification workspace, and storage overhead. An estimate is advisory; handle write failures too.
 3. Stream the download into isolated staging storage with bounded memory. Report received bytes and percentage when known, support cancellation, and keep the current map and passport UI usable. V1 retries may restart cleanly; resumable downloads are not required. Interrupted/cancelled candidates never become installed, and abandoned staging is reclaimed on restart.
 4. Verify actual archive size and SHA-256 against the program manifest, validate PMTiles structure/header/metadata and schema/coverage/zoom compatibility, and verify each required resource's bytes, checksum, and style references. Hash incrementally or in bounded chunks; do not assume a whole-archive in-memory operation is viable on phones. Generation-time structure verification is separate from browser download integrity.
@@ -1441,7 +1488,7 @@ Core owns this lifecycle behind a testable storage contract covering staging wri
 
 ## 33.4 Storage capacity, persistence, and eviction
 
-Core must feature-detect and call `navigator.storage.estimate()` for usage/quota information and `navigator.storage.persist()` when the user requests an offline map, where available. Handle promise rejection, a false persistence result, and missing APIs explicitly. These APIs require a secure context; estimates are approximate and a persistence request is not guaranteed to succeed. See MDN's [estimate](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/estimate) and [persist](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist) documentation.
+Core must feature-detect and call `navigator.storage.estimate()` for usage/quota information, query `navigator.storage.persisted()` at startup/foreground checks, and request `navigator.storage.persist()` during manual or automatic offline setup, where available. Handle promise rejection, a false persistence result, and missing APIs explicitly. These APIs require a secure context; estimates are approximate and a persistence request is not guaranteed to succeed. See MDN's [estimate](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/estimate) and [persist](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist) documentation.
 
 Denied or unavailable persistence permits best-effort installation if writes work, with honest status. If storage itself is denied or unusable, report Download unavailable/failed and preserve core passport use to the extent its own storage is available. Never claim either map or user-data persistence that did not succeed.
 
@@ -1449,7 +1496,7 @@ Recheck installed manifests, actual archive presence/length, required resources,
 
 Browser quotas and eviction operate at the origin level; program namespacing prevents accidental cross-program deletion but does not create independent quotas for Pages project paths. Best-effort data may be evicted; user clearing of browser data may remove persisted content too. The UI must not equate historical download success or persistence status with present bytes. See [MDN storage quotas and eviction](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria).
 
-The concrete binary storage mechanism remains a bounded core validation task in Section 70: prove bounded-memory writes, random byte reads, integrity checks, crash-safe activation, and realistic quota behavior on the target browsers before selecting and documenting the adapter. Keep passport IndexedDB records and attachments logically separate from replaceable map packages; never automatically delete them to satisfy map quota.
+The current adapter is IndexedMapStorage: separate program/package databases hold immutable 1 MiB binary chunks and active/previous inventory metadata. Keep IndexedDB for this UX iteration. OPFS is a future measured comparison behind MapStorage, not part of this work; neither backend bypasses browser storage isolation or eviction. Preserve bounded-memory writes, random byte reads, integrity checks, crash-safe activation, and quota tests. Keep passport IndexedDB records and attachments logically separate from replaceable map packages; never automatically delete them to satisfy map quota.
 
 ## 33.5 Updates, rollback, cleanup, and deletion
 
@@ -1457,7 +1504,9 @@ Basemap versions are independent of application/core and airport-data releases. 
 
 Retain the previous package through successful activation and local reopen. Only then may generic cleanup reclaim obsolete versions/resources that no active reader or retained manifest uses; record the retention policy and reclaimed bytes. If the previous version is retained, rollback verifies its resources and atomically reactivates it. Otherwise rollback requires a full verified download of the earlier published release. Do not promise offline rollback after its bytes have been reclaimed.
 
-Delete removes the selected program package's archive, staging data, installed/version metadata, and unreferenced package resources, including retained versions when deleting the entire offline map. Coordinate open readers/tabs, report deletion failures, and recheck actual presence. Shared shell resources remain while referenced. Never delete check-ins, notes, photos, preferences, or program datasets. After deletion, online range use may continue with accurate Not downloaded status; offline overlays and the list remain usable. Offer redownload.
+The following removal contract remains a core maintenance/recovery capability, not a requirement to expose a Delete map button in the planned normal UI. Cleanup may reclaim abandoned staging and obsolete unreferenced generations, but must preserve the active working map and the documented rollback policy. Browser-owned site-data clearing remains outside the app's control.
+
+Scoped removal deletes the selected program package's archive, staging data, installed/version metadata, and unreferenced package resources, including retained versions when deleting the entire offline map. Coordinate open readers/tabs, report deletion failures, and recheck actual presence. Shared shell resources remain while referenced. Never delete check-ins, notes, photos, preferences, or program datasets. After deletion, online range use may continue with accurate Not downloaded status; offline overlays and the list remain usable. Offer redownload.
 
 ## 33.6 Reproducible generation and release
 
@@ -1481,7 +1530,7 @@ Publish archive/resources before advertising their manifest. Verify the actual p
 
 ## 33.7 V1 exclusions and validation gates
 
-Do not add CARTO dependencies or tile prefetching, bulk downloads from public OpenStreetMap tile servers, MBTiles, a backend/proxy/tile server, delta updates, automatic large downloads, multiple selectable hosted providers, per-airport high-zoom coverage, or airport/passport data embedded in PMTiles. Public OSM tile offline/bulk fetching is prohibited by its [tile usage policy](https://operations.osmfoundation.org/policies/tiles/); OSM-derived downloadable data is the selected source instead.
+Do not add CARTO dependencies or tile prefetching, bulk downloads from public OpenStreetMap tile servers, MBTiles, a backend/proxy/tile server, delta updates, automatic browser-tab downloads or automatic transfers outside Section 32.3, multiple selectable hosted providers, per-airport high-zoom coverage, or airport/passport data embedded in PMTiles. Public OSM tile offline/bulk fetching is prohibited by its [tile usage policy](https://operations.osmfoundation.org/policies/tiles/); OSM-derived downloadable data is the selected source instead.
 
 Section 70 must validate the actual Pages endpoint, storage mechanism, bounded-memory download/verification, local PMTiles reads, resource completeness, service-worker routing, and old/new coexistence under quota. If an assumption fails, stop the dependent migration step and revise this architecture explicitly; do not silently introduce an excluded workaround or weaken offline requirements.
 
@@ -1510,6 +1559,32 @@ The application should behave appropriately when:
 The app owns service-worker/build routing and core owns reusable package behavior. Precache the small shell and bundled program data independently; exclude the large PMTiles archive from mandatory installation precache. Online archive Range requests must reach the static host without an HTML navigation fallback or an incorrectly substituted partial cache entry. Complete installed-package reads use the local storage adapter, independently of opportunistic HTTP caches.
 
 Track locally required styles, sprites, glyphs, fonts, attribution, runtime workers, and their compatibility as specified in Section 33.2. Validate cold offline startup with all network access blocked after explicit installation. Worker updates/cache cleanup must preserve installed map resources and unfinished visit state; shell updates and map updates have distinct readiness and activation lifecycles.
+
+## 34.1 Browser and installed-app storage contexts (planned UX)
+
+A browser tab, a home-screen app, another origin, and another device must not be assumed to share installed maps, visit records, setup preferences, or storage protection. WebKit documents that iOS Add to Home Screen copies cookies but no other local storage and does not subsequently share website data; this includes installation from other iOS browsers ([WebKit, Login cookies](https://webkit.org/blog/14787/webkit-features-in-safari-17-2/#login-cookies)). Chrome on iOS 26 is the owner's reported test environment; do not equate it with Android Chrome.
+
+For users intending home-screen use, explain **Add to Home Screen, open the installed app while connected, then make its map available offline** before downloading in the browser. On first standalone launch, inspect actual storage and run Section 32.3 if needed. Standalone display is a context hint, not proof of installation, shell caching, or shared browser bytes. Do not promise a PWA-install event or API can transfer IndexedDB/OPFS data. Existing visits transfer through export/import; never delete or reset the browser's passport during setup.
+
+Validate the same-origin production URL, manifest start URL/scope, and app build when investigating apparently missing data. A phone's plain HTTP LAN address on port 5173 is a different origin from production and may lack secure-context capabilities; show unsupported storage/PWA operations explicitly. Localhost and HTTPS trust rules are defined by [Secure Contexts](https://www.w3.org/TR/secure-contexts/#is-origin-trustworthy). Do not infer a production failure from an unsupported LAN testing context.
+
+The app owns deployment/build identity and shell readiness reporting; core consumes their adapter and owns map/persistence status. Test the exact built output served on port 5173 after packaging core: rebuilding dist-e2e alone does not update a preview serving dist. Existing service workers may need their normal update activation; preserve user data and do not require clearing all site storage to validate a UI change.
+
+### First-load mobile installation guidance
+
+Show instructions appropriate to the detected platform/browser, with a manual platform choice if detection is uncertain. Safari/Chrome on iOS use the share menu and Add to Home Screen; explain Open as Web App when offered and finish with opening the new icon. Android Chrome can use a supported browser install prompt initiated by a user action, with browser-menu instructions as fallback. Hide install promotion in standalone mode and remember Not now without removing later help. The notification describes automatic map preparation on first installed launch and its measured size, so that behavior is not a surprise.
+
+Implementation must verify exact labels against the current [Chrome iOS instructions](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DiOS&hl=en), [Chrome Android instructions](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=en), and [WebKit iOS 26 web-app behavior](https://webkit.org/blog/17333/webkit-features-in-safari-26-0/). Do not claim the page can install itself or that a home-screen bookmark is necessarily a standalone PWA.
+
+### Android Chrome behavior and validation
+
+Chrome-installed Android PWAs (WebAPKs) use the installing Chrome profile's storage. For the same origin/profile, the browser and installed app share client-side data; a verified browser download should remain available after installation without another transfer ([Google WebAPK storage documentation](https://web.dev/articles/webapks#managing_storage_and_app_state)). This is documented platform behavior, not physical-device acceptance for this application. Do not generalize it to other browsers, profiles, origins, or embedded WebViews.
+
+The iOS redownload explanation must be platform-specific. On Android Chrome, offer installation without suggesting that it invalidates an existing offline map. On every platform, check actual package bytes and shell readiness before claiming success or starting another download; installation itself is not a reason to erase or redownload a valid package. Shared storage also means explicitly clearing the site's data in Chrome affects the installed PWA.
+
+The owner has no Android phone available. Retain desktop Chromium mobile-emulation coverage for layout, touch input, and lifecycle behavior, but label it as emulation: Playwright device settings do not execute Android or install a WebAPK ([Playwright emulation](https://playwright.dev/docs/emulation)). A planned Android Studio virtual device with a Google Play system image and Chrome can exercise the Android browser/home-screen flow where installation is supported ([Android virtual devices](https://developer.android.com/studio/run/managing-avds)); record installation limitations rather than counting a shortcut/tab as a tested installed PWA.
+
+Android acceptance must exercise browser download, a saved visit, installation, launch from the home-screen icon, unchanged visit/map availability, no duplicate full-package requests, cold offline startup, unseen-area zoom, and shared-state reconciliation in the browser. Exercise scoped removal through a controlled test harness, not a normal Delete button. Also test install-first download, cancellation, and recovery. An emulator is useful intermediate evidence, not proof of real-phone storage pressure, memory, performance, or background suspension. Physical Android results remain pending until a borrowed device or suitable real-device testing service is available; no purchase, service signup, SDK installation, or implementation is authorized by this plan.
 
 ---
 
@@ -2088,6 +2163,18 @@ Record browser/OS versions and results on physical iPhone/iPad Safari and Androi
 
 The historical WebKit internal-navigation-error exception in the status record is narrow: retain service-worker and cached-shell preconditions, skip only the identified error, and fail other errors/assertions. It does not waive first offline startup or establish Safari support. Record affected automation versions and complete physical-device verification before claiming target mobile acceptance.
 
+## 58.2 Offline setup and status acceptance
+
+Phase U1 must cover manual browser downloads and automatic initial standalone preparation, including retained suppression after cancel/delete, a deferred offline-first attempt, and the full-origin-erasure limitation in Section 32.3.
+
+1. First use, setup acceptance/defer or the approved automatic trigger, installed-map bypass, and the agreed behavior after cancellation/deletion/failure. Verify actual request counts across reloads and tabs; preference storage failures must not create an automatic download loop.
+2. Desktop and phone discoverability without scrolling: Offline access remains visible and opens the same independent card on first use and subsequent activation, preserving the active tab and Explore/map/list/draft state. Verify Close/Escape, focus restoration, non-modal keyboard navigation, and installation help after dismissal or download. Verify the smaller Share glyph has adjacent readable Share text, desktop card centering and narrow-screen gutters, and repeated click/Enter/Space expansion and collapse for each disclosure. Test narrow screens, enlarged text, keyboard, and VoiceOver where available.
+3. Starting, byte progress, verification, completed installation, update failure with usable old map, and actionable errors. Assert numerical percentage or remaining MB stays visible on the map/list/passport layouts, with received/total MB in detail and a separate verification phase. A healthy installed map has no normal Delete action; cancelling an update preserves it. Test internal removal/cleanup separately.
+4. Offline online-style failure followed by connectivity recovery and successful local installation: old warnings clear only after renderer recovery, unrelated notices survive, and stale requests cannot override newer success. Test a same-style retry and real missing resources separately.
+5. persist() grant followed by reload and persisted() grant/false/unsupported/rejection. Availability and protection remain independent. Check/request happens automatically without requiring a manual action; granted protection shows no indicator, while denied/unknown results show a subtle accessible control with details only on expansion. Foreground/cross-tab events do not duplicate requests or regress current operation state.
+6. Browser-first versus install-first flows on physical iOS, including Chrome iOS 26 and Safari, plus Android Chrome where available. Record OS/browser/build/URL, context, final status, and visible numeric progress/readiness. Separate browser/PWA storage is expected on iOS; repeated loss inside the same installed app after verified completion is a defect to investigate.
+7. Complete real-package offline cold startup, pan/zoom to previously unviewed areas, both appearances, supporting resources, app restart readiness, and visit preservation. Network access stays blocked throughout assertions. Synthetic contexts can test logic but cannot prove iOS installation or suspension behavior.
+
 ---
 
 # 59. CI — `core-passport`
@@ -2375,6 +2462,8 @@ The Oregon test application is an architectural canary, not a distraction from W
 
 # 70. Recommended Implementation Phases
 
+The next offline UX work is Phase U1 below; its responsive UX review is complete as recorded in Phase U1. M0/M1 retain the original migration sequence and evidence requirements; they are not instructions to reimplement the already deployed renderer.
+
 Phases 0–9 below retain the original roadmap and exit criteria. Repository setup, the map/passport slice, basic filters, notes/JSON transfer, and the full captured roster are already implemented to the extent described in the status record; GPS, photos/ZIP, dated awards, advanced filters, achievements, and Oregon remain future work. Do not treat these phases as a blank-repository starting point or claim remote/device checks passed merely because tooling exists.
 
 ## Migration Phase M0 — Measure Washington Map Candidates
@@ -2415,6 +2504,18 @@ existing airport/passport/appearance/accessibility behavior preserved
 ```
 
 Migration phases record the map implementation and its remaining release gates; the original numbered roadmap follows for historical context and remaining non-map features.
+
+## Phase U1 — Offline setup and trustworthy status (planned, not implemented)
+
+Design-review artifact (2026-09-13): `fly-washington/docs/mockups/offline-access.html` is a self-contained interactive desktop/mobile mockup, with scenario controls and usage notes in its adjacent README. It demonstrates layout and simulated feedback only; production download/storage behavior is unchanged. Feedback revision (2026-09-19): one non-modal map card now serves first use and the persistent Offline access control on both layouts; installation help remains available, granted protection is hidden, and exception details expand on demand. Owner approval (2026-09-19): the revised desktop/mobile mockup is approved as the Phase U1 design baseline, including the centered responsive card, smaller Share glyph, consistent collapsible sections, numerical progress, cancellation, and subtle storage-protection feedback. This completes mockup design review; production implementation, lifecycle validation, and physical-device acceptance remain outstanding. No commit, push, or deployment is implied.
+
+1. Follow the approved desktop/mobile mockups and Section 32.3 browser/PWA policy for first use, deferred setup, progress, verification, installed, failed, and missing-package states. Resolve the installed-app delete-control report using the actual final download status/build before assigning a cause.
+2. Core: implement one readiness/state model, persistence rechecking, owned renderer-error recovery, and serialized/coalesced lifecycle refreshes; retain IndexedDB and current verification/update safety.
+3. Core: implement the shared Offline access navigation control and reusable first-use/status card, grouped progress/actions, and accessible status UI in Sections 32.3-32.5. Test with synthetic programs independently of Fly Washington.
+4. Fly Washington: integrate generic setup with app-owned installation guidance, shell readiness and build identification; use existing measured package metadata and release assets. No Washington storage logic moves into the app.
+5. Complete Section 58.2 acceptance, package a new tested core version, update the consuming tarball/lockfile and documentation, and rebuild the actual local preview output. Physical installed-PWA testing must precede claims of full readiness. No commit, push, or deployment without the owner's instruction.
+
+Exit criteria: users can discover and complete offline setup without searching My passport; they can see current progress and accurate readiness on both layouts; a verified package survives tested installed-app restart and supports all resources offline; stale warnings recover, healthy maps have no normal Delete action, and repair/cancellation are clear; saved visits and drafts remain intact.
 
 ## Phase 0 — Repository Foundation
 
@@ -2627,7 +2728,7 @@ Basemap hosting: static HTTP compatible with GitHub Pages and Range requests
 Offline package storage: browser-managed persistent-capable storage behind a core abstraction
 ```
 
-The unpublished implementation uses TypeScript/DOM components, MapLibre GL JS, PMTiles, chunked IndexedDB via idb, Vitest, and Playwright. Leaflet/CARTO describes the historical released system. Map library selection is settled. The IndexedDB adapter has standalone lifecycle and browser coverage; physical-device storage/memory validation remains an M0 acceptance gate. MBTiles/browser SQLite is outside this architecture.
+The current implementation uses TypeScript/DOM components, MapLibre GL JS, PMTiles, chunked IndexedDB via idb, Vitest, and Playwright. Leaflet/CARTO describes the historical released system. Map library selection is settled. The IndexedDB adapter has standalone lifecycle and browser coverage; physical-device storage/memory validation remains an M0 acceptance gate. MBTiles/browser SQLite is outside this architecture.
 
 The original general library choices below remain areas for deliberate selection or evolution as needed; existing selections should not be reopened without a concrete requirement:
 
@@ -2676,6 +2777,8 @@ For a normal feature to be complete:
 
 # 73. Coding-Agent Instructions
 
+For the next offline UX iteration, implement Phase U1 and Sections 32.3-32.5/34.1 only after the plan and download policy are approved. Use the bounded standalone automatic-download policy in Section 32.3; do not extend it to browser tabs, updates, cancelled attempts, or deliberately deleted maps. Treat the original offline brief as migration history where this dated plan explicitly refines UX. Preserve its package integrity and core/program boundaries.
+
 Automated coding agents working in these repositories must preserve the architectural rules in this document.
 
 Before implementing a feature, an agent should determine:
@@ -2709,7 +2812,7 @@ Agents must not replace local-first behavior with cloud-only functionality.
 
 For offline maps, follow the approved MapLibre/PMTiles design and Migration Phases M0/M1. Preserve current product semantics and independent airport/passport data. Keep Washington artifacts/policy in the app and generic renderer, storage lifecycle, status UI, and defaults in core. Do not substitute CARTO caching, public OpenStreetMap tile downloads, MBTiles, or a backend. Verify primary documentation for pinned APIs, asset/data licenses, browser support, and host limits; label expectations and experiments honestly.
 
-Before declaring completion, prove local availability of the archive and every style/sprite/glyph/font/attribution resource, failed-update safety, eviction recovery, and the Section 58 behavior regressions. Update the public contract and consuming core tarball workflow. If an M0 assumption fails, stop the dependent work and document the architectural revision rather than adding an undocumented workaround. Do not remove current Leaflet/CARTO setup until migration tests pass.
+Before declaring completion, prove local availability of the archive and every style/sprite/glyph/font/attribution resource, failed-update safety, eviction recovery, and the Section 58 behavior regressions. Update the public contract and consuming core tarball workflow. If an M0 assumption fails, stop the dependent work and document the architectural revision rather than adding an undocumented workaround. The earlier migration required Leaflet/CARTO removal only after migration tests passed; do not reintroduce that retired setup for Phase U1.
 
 ---
 
@@ -2770,7 +2873,11 @@ These questions should be used in code review as well as implementation planning
 Does MapLibre render the same program-owned Protomaps PMTiles basemap online/offline?
 Are rendering/lifecycle/defaults in core and Washington artifacts/policy/releases in the app?
 Are program airports, regions, stamps, visits, and marker state separate from PMTiles?
-Which complete archive/resources must the user download, and how is presence checked now?
+How does a first-time user discover offline setup, what starts the transfer, and what happens after defer/cancel/delete?
+Which complete archive/resources are installed, and how is presence checked in this browser or installed-app context?
+Is numerical progress continuously visible yet subtle on mobile and desktop, with verification separate from transfer?
+Does the normal UI retain healthy maps and expose cancellation/repair without offering routine deletion?
+Do recovered map errors clear without hiding unrelated failures, and is persistence rechecked?
 Are shell, program data, user data, basemap, and persistence statuses independently accurate?
 What happens on denied/full storage, interruption, corrupt bytes, eviction, and deletion?
 Does a failed replacement keep the last known-good map and all passport data usable?
@@ -2807,7 +2914,7 @@ The following are not required for the initial product:
 
 Avoid building infrastructure for these until there is a concrete requirement.
 
-The initial map migration also excludes the approaches listed in Section 33.7. In particular, no hosted-provider comparison/selector, per-airport high-zoom optimization, automatic large download, or delta-update infrastructure is required.
+The initial map migration also excludes the approaches listed in Section 33.7. In particular, no hosted-provider comparison/selector, per-airport high-zoom optimization, automatic browser-tab downloads or automatic transfers outside Section 32.3, or delta-update infrastructure is required.
 
 ---
 
@@ -2856,44 +2963,44 @@ The following rules should remain easy to find because violating one generally i
 18. **CI must pass before release/deployment.**
 19. **Oregon should be used early to expose accidental Washington-specific design.**
 20. **Do not generalize one-off behavior until a reusable pattern actually exists.**
-21. **MapLibre GL JS and an OSM-derived Protomaps PMTiles basemap are the approved target; Leaflet/CARTO describes the current system to migrate.**
+21. **MapLibre GL JS and an OSM-derived Protomaps PMTiles basemap are the approved target; Leaflet/CARTO describes the historical system.**
 22. **The same versioned basemap and effective local styles serve online and offline use.**
 23. **Core owns generic map rendering/storage/lifecycle/status/defaults; programs own coverage, artifacts, versions, generation/releases, and visual overrides.**
 24. **Airports, passport regions, stamps, visits, and marker state stay outside PMTiles.**
 25. **Offline map availability requires complete verified bytes and all local rendering resources, not cached ranges or a historical download flag.**
-26. **Large map downloads/updates are explicit user actions, independent of small shell/program precaching.**
+26. **Map installation follows the discoverable Section 32.3 setup policy; updates remain explicit and shell/program precaching stays independent.**
 27. **A failed update must retain the working map; map cleanup/deletion must never erase passport data.**
 28. **Persistence requests, storage denial/quota, corruption, and eviction receive honest actionable states.**
 29. **Basemap versions are independent of app/core and airport-data versions, with reproducible release/rollback records.**
 30. **No backend, tile server, CARTO requirement, public OSM bulk tile download, or MBTiles solution is introduced.**
-31. **Shipping detail/size requires the z9–z13 experiment; z11/z12 and under 100 MB are unmeasured expectations.**
+31. **Shipping detail/size is supported by the recorded z9–z13 experiment; its measured results supersede the original size/zoom expectations and do not imply complete device acceptance.**
 32. **Renderer migration preserves selection, fitting, overlays, labels, filters, map/list behavior, responsive accessibility, appearance, and unfinished visits.**
 
 ---
 
 # 78. Immediate Next Steps
 
-Continue from the unpublished core 0.5.0 implementation and the full integrated Washington roster. The initial foundation instructions formerly here are preserved by Sections 68 and 70's original phases; do not recreate the repositories or reduce the dataset. Rendering, package lifecycle, integration, and reproducible map preparation are implemented; release acceptance is incomplete.
+Continue from the implemented MapLibre/PMTiles system and committed core 0.5.1 marker-gesture fix. The owner reports the application deployed and has confirmed desktop/mobile gestures locally; this is not complete installed-PWA offline acceptance. The next work is the planned Phase U1, not another renderer or storage migration.
 
 ## `core-passport`
 
-1. Complete physical-device storage, memory, and cold-start acceptance for the implemented IndexedDB adapter against Section 33.7.
-2. Maintain the typed package/resource contract, renderer, lifecycle, and Section 16.2 behavior independently of program repositories.
-3. Preserve standalone synthetic-fixture tests for readiness, download failure/cancellation, verification, eviction, rollback, deletion, and visit/draft isolation.
-4. Rebuild and explicitly refresh the consuming tarball after core changes; public exports and raster-contract migration are documented in `docs/OFFLINE-MAPS.md`.
+1. Use the approved responsive Offline access design recorded in Phase U1 and the browser-manual/PWA-automatic direction in Section 32.3 as the implementation baseline.
+2. Implement persistence rechecking, coherent readiness/renderer recovery, and visible setup/progress/maintenance actions through reusable core modules.
+3. Add independent Section 58.2 regressions; preserve integrity, update/rollback, deletion isolation, and all Section 16.2 product behavior.
+4. Package a new core version only after checks; do not overwrite the committed 0.5.1 archive to ship these changes.
 
 ## `fly-washington`
 
-1. Review the measured z9–z13 comparison on physical iPhone/Android devices before promoting the z12 candidate. Pinned generation, coverage buffer, byte counts, hashes, and browser diagnostics are recorded in `maps/` and `docs/OFFLINE-MAPS.md`.
-2. Retain the complete immutable map release durably and configure its archive source for reproducible builds. After authorized publication, validate the actual Pages archive Range responses and every resource; the unpublished package endpoint currently returns 404.
-3. Keep consuming the versioned core tarball without requiring a sibling checkout. Keep Washington package metadata, generation/release scripts, coverage, and airport/region data in this repository.
-4. Complete physical Safari cold-start acceptance and a remote CI run. Automated Chromium cold startup passes; automated WebKit open-app offline rendering passes but its narrowly identified internal cold-navigation error remains unresolved.
+1. Reproduce the reported Chrome iOS 26 installed-app warning/delete inconsistency, recording build, URL, standalone context, and final download status. Keep browser-to-PWA storage separation distinct from an actual failed installation.
+2. Integrate app-owned installation guidance and shell/build diagnostics with the reusable UI. Continue release-assets distribution and current Washington package; no archive regeneration is needed for this UX work.
+3. Update the versioned core tarball and lockfile together; build/test without a sibling checkout. Rebuild the production preview served at port 5173 before physical testing.
+4. Complete physical installed-app offline startup, unseen-area zoom, numerical progress/recovery/cancellation, internal cleanup safety, and visit transfer acceptance. Record remaining browser limitations honestly.
 
 ## Directly affected documentation follow-up
 
-Core/app READMEs, public API documentation, development and data-source notes, and dedicated offline-map records now describe the unpublished implementation, generation commands, evidence, and release gates. Leaflet dependencies and application CARTO environment/CI references have been retired after local renderer migration checks; historical release information is retained. Keep these documents current as remaining release acceptance proceeds. No production deployment, commit, or push is implied by this implementation record.
+This edit changes planning only. Core/app READMEs, development notes, and offline-map API/release records must link to this plan and distinguish implemented manual downloads from planned setup. Their older unpublished/deployment-gate wording must be reconciled with verified release/device evidence during Phase U1. Preserve historical measurements and testing limitations rather than claiming unobserved acceptance.
 
-Keep unrelated roadmap work visible: dated award eligibility, precise stamp targets and missing metadata, GPS, richer filters, photos/ZIP backup, achievements, Oregon validation, registry publication, and pending deployment/device acceptance remain as recorded. The renderer migration must not silently implement, remove, or redefine those requirements.
+Keep unrelated roadmap work visible: dated awards, precise stamp targets, GPS, advanced filters, photos/ZIP backup, achievements, Oregon validation, and registry publication remain separate. No production code, package contents, commit, push, or deployment changes are part of this documentation task.
 
 ---
 
