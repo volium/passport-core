@@ -78,7 +78,8 @@ test('marker outlines adapt when the viewport crosses the mobile breakpoint', as
   await expect(page.locator('.airport-map-hit')).toHaveCount(2);
   const stroke = () => page.evaluate(() => {
     const fixture = window as unknown as { fixtureApp: { map: { map: import('maplibre-gl').Map } } };
-    return fixture.fixtureApp?.map.map.getPaintProperty('passport-airports','circle-stroke-width');
+    const map = fixture.fixtureApp?.map.map;
+    return map?.getLayer('passport-airports') ? map.getPaintProperty('passport-airports','circle-stroke-width') : undefined;
   });
   await expect.poll(stroke).toBe(3);
   await page.setViewportSize({width:600,height:800});
