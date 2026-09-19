@@ -6,6 +6,10 @@ Program-independent TypeScript implementation for local aviation passports. This
 
 The approved Offline access card is implemented with persistent numeric progress, reusable installation guidance, automatic storage-protection checking, and independent renderer recovery. Browser downloads remain manual; eligible standalone launches prepare the initial map automatically with Cancel and retained retry suppression. See [offline API and lifecycle documentation](docs/OFFLINE-MAPS.md). This revision is awaiting physical-device acceptance and deployment.
 
+## UI fixes (0.6.1)
+
+Export success appears beneath the initiating button for five seconds; export errors stay there until retried, independently of import/general notices. The offline card title retains announcement focus without a decorative outline, while keyboard controls keep visible focus. The map card displays download size without asking users to check storage headroom; quota checks and actionable errors remain. Full saved-package startup verification is unchanged and is being investigated separately.
+
 ## Development
 
 Requires Node.js 24 LTS and npm. From this repository:
