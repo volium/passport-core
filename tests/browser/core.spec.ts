@@ -225,3 +225,13 @@ test('export feedback belongs to its button, expires, and leaves unrelated notic
   await expect(page.locator('#offline-export-status')).toHaveText('',{timeout:7000});
   await expect(page.locator('#export-status')).toHaveText('');
 });
+
+
+test('initial card title has no focus highlight while keyboard controls retain theirs', async ({ page }) => {
+  await page.goto('/tests/browser/app.html?program=focus-test');
+  await expect(page.locator('#offline-heading')).toBeFocused();
+  await expect(page.locator('#offline-heading')).toHaveCSS('outline-style','none');
+  await page.keyboard.press('Tab');await expect(page.locator('#offline-close')).toBeFocused();
+  await expect(page.locator('#offline-close')).toHaveCSS('outline-style','solid');
+  await page.keyboard.press('Escape');await expect(page.locator('#offline-access')).toBeFocused();
+});

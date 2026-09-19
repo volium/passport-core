@@ -180,3 +180,6 @@ progress::-moz-progress-bar { background: var(--region, #438262); }
 .export-action > button { width:100%; font-size:14px; line-height:1.4; }
 .export-action .export-feedback { margin:0; font-size:12px; }
 .export-action .export-feedback:not(:empty) { margin-top:8px; }
+
+/* The card title receives announcement focus, but is not an interactive control. */
+#offline-heading:focus { outline:none; }
