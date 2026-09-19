@@ -119,7 +119,7 @@ export class OfflineAccess {
       this.el('#offline-announcement').textContent = status.state === 'downloading' ? 'Map download started.' : labels[status.state];
     }
     this.el('#map-name').textContent = this.manager.advertised.name;
-    this.el('#map-size').textContent = `Complete download: ${mb(status.total)} MB. Allow about ${mb(status.total*1.15+2*1024*1024)} MB free in addition to saved maps; actual storage varies.`;
+    this.el('#map-size').textContent = `Complete download: ${mb(status.total)} MB.`;
     this.el('#map-status').textContent = transfer ? `${percent}% · ${mb(status.downloaded)} / ${mb(status.total)} MB` : `${status.active?'Map available on this device. ':''}${labels[status.state]}. ${status.error ?? ''}${status.state==='cancelled'?' It will not restart automatically. Retry when ready.':''}${status.state==='waiting'?' Download will start when connected while the app is open.':''}${status.active&&status.updateAvailable?' Your saved map remains usable until an update is verified.':''}`;
     for (const id of ['#map-progress','#offline-progress']) {
       const progress = this.el<HTMLProgressElement>(id); progress.hidden = !transfer; progress.max = status.total; progress.value = status.downloaded;
