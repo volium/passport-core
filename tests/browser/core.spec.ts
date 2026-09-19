@@ -208,3 +208,20 @@ test('renderer retry clears its warning without clearing unrelated feedback', as
   await expect(page.locator('#map-renderer-status')).toBeHidden();
   await expect(page.locator('#notice')).toHaveText('Keep unrelated save feedback');
 });
+
+
+test('export feedback belongs to its button, expires, and leaves unrelated notices intact', async ({ page }) => {
+  await page.goto('/tests/browser/app.html');
+  await page.locator('#passport-tab').click();
+  await page.evaluate(()=>{document.querySelector('#passport-notice')!.textContent='Existing import feedback';});
+  const download=page.waitForEvent('download');await page.locator('#export').click();await download;
+  await expect(page.locator('#export-status')).toContainText('Passport exported.');
+  await page.locator('#explore-tab').click();
+  await page.locator('#storage-protection').click();
+  const second=page.waitForEvent('download');await page.locator('#offline-export').click();await second;
+  await expect(page.locator('#offline-export-status')).toContainText('Passport exported.');
+  await expect(page.locator('#notice')).not.toContainText('Passport exported.');
+  await expect(page.locator('#passport-notice')).toHaveText('Existing import feedback');
+  await expect(page.locator('#offline-export-status')).toHaveText('',{timeout:7000});
+  await expect(page.locator('#export-status')).toHaveText('');
+});

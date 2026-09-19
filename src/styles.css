@@ -174,3 +174,9 @@ progress::-moz-progress-bar { background: var(--region, #438262); }
 @media(max-width:760px) { .offline-navigation { padding:4px 8px 8px; } .offline-card { padding:16px; } .offline-card-heading { top:-16px; } }
 
 #map-download, #map-replace { background:#256b53; color:white; border-color:#256b53; }
+
+.backup-actions:has(.export-action) { align-items:flex-start; }
+.export-action { flex:1 1 130px; }
+.export-action > button { width:100%; font-size:14px; line-height:1.4; }
+.export-action .export-feedback { margin:0; font-size:12px; }
+.export-action .export-feedback:not(:empty) { margin-top:8px; }

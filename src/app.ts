@@ -30,6 +30,7 @@ export class PassportApp {
   private initialMapFit = false;
   private previewOnly = false;
   private saveNoticeTimer?: ReturnType<typeof setTimeout>;
+  private exportNoticeTimers = new Map<HTMLElement, ReturnType<typeof setTimeout>>();
   constructor(private options: { program: PassportProgram; offlineShellReady?: () => Promise<boolean>; installationGuidance?: () => InstallationGuidance }) {
     validateProgram(options.program);
     this.store = new PassportStore(options.program.id);
@@ -83,7 +84,7 @@ export class PassportApp {
       <div class="filter-row"><label>Region<select id="region"><option value="">All regions</option>${p.regions.map(r => `<option value="${escape(r.id)}">${escape(r.name)}</option>`).join('')}</select></label><label>Passport<select id="visited"><option value="all">All airports</option><option value="unvisited">Not visited</option><option value="visited">Visited</option></select></label></div>
       <div class="mobile-toggle" aria-label="Airport view"><button type="button" data-view="map" aria-pressed="true">Map</button><button type="button" data-view="list" aria-pressed="false">List</button></div>
       <div id="airport-list" tabindex="-1" class="airport-list"></div></div><section id="detail" class="detail" hidden aria-label="Airport details"></section></section>
-      <section id="passport-panel" class="passport-panel" role="tabpanel" hidden aria-labelledby="passport-tab"><div class="passport-content"><p>${escape(p.description)}</p><p class="local-label">Saved on this device</p><div class="backup-actions"><button id="export" type="button">Export passport</button><label class="button">Import passport<input id="import" type="file" accept="application/json,.json" class="sr-only"></label></div><p id="passport-notice" role="status" aria-live="polite"></p><section class="passport-section"><h3>Your regional passport</h3><div id="regions" class="region-cards"></div></section><p class="data-notice">${escape(p.dataNotice)}</p><p><a href="${escape(new URL('./notices.txt',import.meta.url).href)}" target="_blank" rel="noopener">Software licenses</a></p></div></section>
+      <section id="passport-panel" class="passport-panel" role="tabpanel" hidden aria-labelledby="passport-tab"><div class="passport-content"><p>${escape(p.description)}</p><p class="local-label">Saved on this device</p><div class="backup-actions"><div class="export-action"><button id="export" type="button" aria-describedby="export-status">Export passport</button><p id="export-status" class="export-feedback" role="status" aria-live="polite"></p></div><label class="button">Import passport<input id="import" type="file" accept="application/json,.json" class="sr-only"></label></div><p id="passport-notice" role="status" aria-live="polite"></p><section class="passport-section"><h3>Your regional passport</h3><div id="regions" class="region-cards"></div></section><p class="data-notice">${escape(p.dataNotice)}</p><p><a href="${escape(new URL('./notices.txt',import.meta.url).href)}" target="_blank" rel="noopener">Software licenses</a></p></div></section>
       </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><section id="airport-preview" class="airport-preview" hidden aria-label="Selected airport"><div><strong id="preview-name"></strong><p id="preview-meta"></p></div><div class="preview-actions"><button id="preview-details" type="button">View details</button><button id="preview-close" type="button" aria-label="Dismiss airport preview">Close</button></div></section><div class="map-caption"><div class="map-legend"><span class="map-legend-item"><span class="map-legend-marker" aria-hidden="true"></span>Not visited</span><span class="map-legend-item"><span class="map-legend-marker is-visited" aria-hidden="true"></span>Visited</span></div><button id="fit" type="button">Show all matches</button></div></section></div>
       ${offlineCard}`;
     this.setupTheme();
@@ -112,7 +113,7 @@ export class PassportApp {
     this.el('#preview-details').addEventListener('click', () => { this.renderDetail(); this.el('#close-detail').focus(); });
     this.el('#preview-close').addEventListener('click', () => this.closeDetail(false));
     this.el('#fit').addEventListener('click', () => this.fitMatchingAirports());
-    this.el('#export').addEventListener('click', () => void this.export());
+    this.el('#export').addEventListener('click', () => void this.export('#export-status', '#export'));
     this.el('#import').addEventListener('change', event => void this.import(event.target as HTMLInputElement));
     const tabs = [this.el('#explore-tab'), this.el('#passport-tab')];
     tabs.forEach((tab, index) => {
@@ -202,7 +203,7 @@ export class PassportApp {
   }
 
   private setupOfflineMap() {
-    this.offlineUI = new OfflineAccess(this.root, this.offline, {programId:this.program.id, shellReady:this.options.offlineShellReady, guidance:this.options.installationGuidance, retry:()=>this.updateBasemap(), exportPassport:()=>{ void this.export(); }});
+    this.offlineUI = new OfflineAccess(this.root, this.offline, {programId:this.program.id, shellReady:this.options.offlineShellReady, guidance:this.options.installationGuidance, retry:()=>this.updateBasemap(), exportPassport:()=>{ void this.export('#offline-export-status', '#offline-export'); }});
     this.offlineUI.rendererStatus(this.rendererMessage);
     let source = '';
     this.unsubscribeMap = this.offline.subscribe(status => {
@@ -410,13 +411,26 @@ export class PassportApp {
     finally { if (deleteButton?.isConnected) deleteButton.disabled = false; }
   }
 
-  private async export() {
+  private async export(statusSelector: string, buttonSelector: string) {
+    const status = this.el(statusSelector);
+    const button = this.el<HTMLButtonElement>(buttonSelector);
+    if (button.disabled) return;
+    clearTimeout(this.exportNoticeTimers.get(status));
+    this.exportNoticeTimers.delete(status);
+    status.textContent = '';
+    button.disabled = true;
     try {
       const backup: PassportBackup = { format: 'aviation-passport', schemaVersion: 1, programId: this.program.id, exportedAt: new Date().toISOString(), checkIns: await this.store.list(), attachments: [] };
+      if (this.events.signal.aborted) return;
       const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
       const link = document.createElement('a'); link.href = url; link.download = `${this.program.id}-passport.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 10000);
-      this.announce('Passport exported. Keep the file to restore or transfer your visits.');
-    } catch { this.announce('Could not read your passport for export. Check browser storage permissions.'); }
+      status.textContent = 'Passport exported. Keep the file to restore or transfer your visits.';
+      this.exportNoticeTimers.set(status, setTimeout(() => {
+        status.textContent = '';
+        this.exportNoticeTimers.delete(status);
+      }, 5000));
+    } catch { if (!this.events.signal.aborted) status.textContent = 'Could not read your passport for export. Check browser storage permissions.'; }
+    finally { button.disabled = false; }
   }
 
   private async import(input: HTMLInputElement) {
@@ -431,5 +445,5 @@ export class PassportApp {
     finally { input.value = ''; }
   }
 
-  async destroy() { clearTimeout(this.saveNoticeTimer); this.events.abort(); this.resize?.disconnect(); this.unsubscribeMap?.(); this.offlineUI?.destroy(); this.offline?.close(); this.map?.remove(); await this.offline?.storage.close(); await this.store.close(); this.root.replaceChildren(); this.root.classList.remove('passport-app'); }
+  async destroy() { for (const timer of this.exportNoticeTimers.values()) clearTimeout(timer); this.exportNoticeTimers.clear(); clearTimeout(this.saveNoticeTimer); this.events.abort(); this.resize?.disconnect(); this.unsubscribeMap?.(); this.offlineUI?.destroy(); this.offline?.close(); this.map?.remove(); await this.offline?.storage.close(); await this.store.close(); this.root.replaceChildren(); this.root.classList.remove('passport-app'); }
 }
