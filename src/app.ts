@@ -38,7 +38,7 @@ export class PassportApp {
   private get program() { return this.options.program; }
   private el<T extends HTMLElement = HTMLElement>(selector: string): T { return this.root.querySelector<T>(selector)!; }
   private announce(message: string) {
-    this.el(this.passportOpen ? '#passport-notice' : '#notice').textContent = message;
+    this.feedback(this.passportOpen ? '#passport-notice' : '#notice', message);
   }
 
   private confirmVisit(message: string) {
@@ -84,7 +84,7 @@ export class PassportApp {
       <div class="filter-row"><label>Region<select id="region"><option value="">All regions</option>${p.regions.map(r => `<option value="${escape(r.id)}">${escape(r.name)}</option>`).join('')}</select></label><label>Passport<select id="visited"><option value="all">All airports</option><option value="unvisited">Not visited</option><option value="visited">Visited</option></select></label></div>
       <div class="mobile-toggle" aria-label="Airport view"><button type="button" data-view="map" aria-pressed="true">Map</button><button type="button" data-view="list" aria-pressed="false">List</button></div>
       <div id="airport-list" tabindex="-1" class="airport-list"></div></div><section id="detail" class="detail" hidden aria-label="Airport details"></section></section>
-      <section id="passport-panel" class="passport-panel" role="tabpanel" hidden aria-labelledby="passport-tab"><div class="passport-content"><p>${escape(p.description)}</p><p class="local-label">Saved on this device</p><div class="backup-actions"><button id="export" type="button" aria-describedby="export-status">Export passport</button><label class="button">Import passport<input id="import" type="file" accept="application/json,.json" class="sr-only"></label></div><p id="export-status" class="export-feedback" role="status" aria-live="polite"></p><p id="passport-notice" role="status" aria-live="polite"></p><section class="passport-section"><h3>Your regional passport</h3><div id="regions" class="region-cards"></div></section><p class="data-notice">${escape(p.dataNotice)}</p><p><a href="${escape(new URL('./notices.txt',import.meta.url).href)}" target="_blank" rel="noopener">Software licenses</a></p></div></section>
+      <section id="passport-panel" class="passport-panel" role="tabpanel" hidden aria-labelledby="passport-tab"><div class="passport-content"><p>${escape(p.description)}</p><p class="local-label">Saved on this device</p><div class="backup-actions"><button id="export" type="button" aria-describedby="export-status">Export passport</button><button id="import-button" type="button" aria-describedby="passport-notice">Import passport</button><input id="import" type="file" accept="application/json,.json" hidden></div><p id="export-status" class="export-feedback" role="status" aria-live="polite"></p><p id="passport-notice" role="status" aria-live="polite"></p><section class="passport-section"><h3>Your regional passport</h3><div id="regions" class="region-cards"></div></section><p class="data-notice">${escape(p.dataNotice)}</p><p><a href="${escape(new URL('./notices.txt',import.meta.url).href)}" target="_blank" rel="noopener">Software licenses</a></p></div></section>
       </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><section id="airport-preview" class="airport-preview" hidden aria-label="Selected airport"><div><strong id="preview-name"></strong><p id="preview-meta"></p></div><div class="preview-actions"><button id="preview-details" type="button">View details</button><button id="preview-close" type="button" aria-label="Dismiss airport preview">Close</button></div></section><div class="map-caption"><div class="map-legend"><span class="map-legend-item"><span class="map-legend-marker" aria-hidden="true"></span>Not visited</span><span class="map-legend-item"><span class="map-legend-marker is-visited" aria-hidden="true"></span>Visited</span></div><button id="fit" type="button">Show all matches</button></div></section></div>
       ${offlineCard}`;
     this.setupTheme();
@@ -114,6 +114,13 @@ export class PassportApp {
     this.el('#preview-close').addEventListener('click', () => this.closeDetail(false));
     this.el('#fit').addEventListener('click', () => this.fitMatchingAirports());
     this.el('#export').addEventListener('click', () => void this.export('#export-status', '#export'));
+    this.el('#import-button').addEventListener('click', () => {
+      this.feedback('#passport-notice', 'Choose a passport JSON backup. If no file chooser opens, try a regular browser tab.');
+      const input = this.el<HTMLInputElement>('#import');
+      try { input.click(); }
+      catch { this.feedback('#passport-notice', 'The file chooser could not be opened. Try again in a regular browser tab.'); }
+    });
+    this.el('#import').addEventListener('cancel', () => this.feedback('#passport-notice', 'Import cancelled. No visits were changed.', true));
     this.el('#import').addEventListener('change', event => void this.import(event.target as HTMLInputElement));
     const tabs = [this.el('#explore-tab'), this.el('#passport-tab')];
     tabs.forEach((tab, index) => {
@@ -441,15 +448,29 @@ export class PassportApp {
   }
 
   private async import(input: HTMLInputElement) {
-    const file = input.files?.[0]; if (!file) return;
+    const button = this.el<HTMLButtonElement>('#import-button');
+    if (button.disabled) return;
+    const file = input.files?.[0];
+    if (!file) { this.feedback('#passport-notice', 'Import cancelled. No visits were changed.', true); return; }
+    this.feedback('#passport-notice', 'Importing passport...');
+    button.disabled = true;
+    let merged = false;
     try {
       if (file.size > 5 * 1024 * 1024) throw new Error('Choose a JSON backup smaller than 5 MB.');
       const backup = validateBackup(JSON.parse(await file.text()), this.program);
       const count = await this.store.merge(backup.checkIns);
-      this.visits = await this.store.list(); this.render(); if (this.selected) this.renderDetail();
-      this.announce(`Imported ${count} visits. Existing visits were preserved.`);
-    } catch (error) { this.announce(error instanceof Error ? error.message : 'Import failed. Existing visits were preserved.'); }
-    finally { input.value = ''; }
+      merged = true;
+      this.visits = await this.store.list();
+      if (this.events.signal.aborted) return;
+      this.render(); if (this.selected) this.renderDetail();
+      this.feedback('#passport-notice', `Imported ${count} visits. Existing visits were preserved.`, true);
+    } catch (error) {
+      const message = merged ? 'Visits were imported, but could not be displayed. Reload to try again.'
+        : error instanceof DOMException ? 'Could not read the backup or save visits. Check file access and browser storage permissions, or try a regular browser tab.'
+        : error instanceof SyntaxError ? 'This file is not valid JSON. Choose a passport backup.'
+        : error instanceof Error ? error.message : 'Import failed. Try again with a passport backup.';
+      this.feedback('#passport-notice', message);
+    } finally { input.value = ''; button.disabled = false; }
   }
 
   async destroy() { for (const timer of this.feedbackTimers.values()) clearTimeout(timer); this.feedbackTimers.clear(); clearTimeout(this.saveNoticeTimer); this.events.abort(); this.resize?.disconnect(); this.unsubscribeMap?.(); this.offlineUI?.destroy(); this.offline?.close(); this.map?.remove(); await this.offline?.storage.close(); await this.store.close(); this.root.replaceChildren(); this.root.classList.remove('passport-app'); }

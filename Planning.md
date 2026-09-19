@@ -1833,6 +1833,8 @@ Stable IDs and schema versions are mandatory.
 
 The user must be able to export their passport data.
 
+Import/export feedback follows [the application feedback contract](docs/FEEDBACK.md): confirmations expire after five seconds, errors remain until retry or resolution, and feedback belongs to the initiating card. My passport backup messages span the content width below the button row. Export must say that the backup was prepared, not claim the browser saved it.
+
 Because photos are binary attachments, the preferred complete backup format is a bundle such as ZIP.
 
 Example:
@@ -1872,6 +1874,8 @@ The actual schema should be formally documented and tested.
 # 46. Import
 
 The application must support restoring a compatible export.
+
+Show local feedback when opening the file chooser, while importing, on cancellation, and on success or failure. Import completion stays in My passport even if the user switches tabs during the operation. Clear successful import and cancellation feedback after five seconds; retain actionable errors until retry. Handle file-access and storage failures without assuming private browsing is unsupported. Private-browser acceptance must include the actual device file chooser; automated file injection alone is insufficient.
 
 Import should:
 

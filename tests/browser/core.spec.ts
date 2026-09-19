@@ -238,3 +238,63 @@ test('initial card title has no focus highlight while keyboard controls retain t
   await expect(page.locator('#offline-close')).toHaveCSS('outline-style','solid');
   await page.keyboard.press('Escape');await expect(page.locator('#offline-access')).toBeFocused();
 });
+
+
+test('import chooser, cancellation, confirmations and failures give local feedback', async ({ page }) => {
+  await page.clock.install();
+  await page.goto('/tests/browser/app.html');
+  await page.locator('#passport-tab').click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.locator('#import-button').click(); await chooser;
+  await expect(page.locator('#passport-notice')).toContainText('Choose a passport JSON backup');
+  await page.locator('#import').dispatchEvent('cancel');
+  await expect(page.locator('#passport-notice')).toContainText('Import cancelled');
+  const backup = { name:'backup.json', mimeType:'application/json', buffer:Buffer.from(JSON.stringify({format:'aviation-passport',schemaVersion:1,programId:'independent-core',exportedAt:new Date().toISOString(),checkIns:[],attachments:[]})) };
+  await page.locator('#import').setInputFiles(backup);
+  await expect(page.locator('#passport-notice')).toContainText('Imported 0 visits');
+  await page.locator('#import').setInputFiles({name:'invalid.json',mimeType:'application/json',buffer:Buffer.from('{')});
+  await expect(page.locator('#passport-notice')).toContainText('not valid JSON');
+  await page.clock.fastForward(6000);
+  await expect(page.locator('#passport-notice')).toContainText('not valid JSON');
+  await page.locator('#import').setInputFiles(backup);
+  await expect(page.locator('#passport-notice')).toContainText('Imported 0 visits');
+  await page.clock.fastForward(5000);
+  await expect(page.locator('#passport-notice')).toHaveText('');
+  await page.evaluate(() => {
+    const app = (window as unknown as {fixtureApp:{store:{merge:()=>Promise<number>}}}).fixtureApp;
+    app.store.merge = async () => { throw new DOMException('Denied','NotAllowedError'); };
+  });
+  await page.locator('#import').setInputFiles(backup);
+  await expect(page.locator('#passport-notice')).toContainText('Check file access and browser storage permissions');
+  await expect(page.locator('#import-button')).toBeEnabled();
+});
+
+test('blocked picker reports an error and an export does not claim the browser saved it', async ({ page }) => {
+  await page.goto('/tests/browser/app.html');
+  await page.locator('#passport-tab').click();
+  await page.evaluate(() => {
+    HTMLInputElement.prototype.click = () => { throw new DOMException('Denied','NotAllowedError'); };
+    HTMLAnchorElement.prototype.click = () => {}; // Browser never saves this export.
+  });
+  await page.locator('#import-button').click();
+  await expect(page.locator('#passport-notice')).toContainText('file chooser could not be opened');
+  await page.locator('#export').click();
+  await expect(page.locator('#export-status')).toContainText('Backup prepared. Save the file');
+  await expect(page.locator('#export-status')).not.toContainText('Passport exported');
+});
+
+
+test('an import finishing after a tab change stays in My passport', async ({ page }) => {
+  await page.goto('/tests/browser/app.html');
+  await page.locator('#passport-tab').click();
+  await page.evaluate(() => {
+    const app = (window as unknown as {fixtureApp:{store:{merge:()=>Promise<number>}}}).fixtureApp;
+    app.store.merge = () => new Promise(resolve => { (window as unknown as {finishImport:()=>void}).finishImport = () => resolve(0); });
+  });
+  await page.locator('#import').setInputFiles({name:'backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'aviation-passport',schemaVersion:1,programId:'independent-core',exportedAt:new Date().toISOString(),checkIns:[],attachments:[]}))});
+  await expect(page.locator('#import-button')).toBeDisabled();
+  await page.locator('#explore-tab').click();
+  await page.evaluate(() => (window as unknown as {finishImport:()=>void}).finishImport());
+  await expect(page.locator('#passport-notice')).toContainText('Imported 0 visits');
+  await expect(page.locator('#notice')).not.toContainText('Imported');
+});
