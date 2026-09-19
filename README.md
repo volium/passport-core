@@ -6,9 +6,13 @@ Program-independent TypeScript implementation for local aviation passports. This
 
 The approved Offline access card is implemented with persistent numeric progress, reusable installation guidance, automatic storage-protection checking, and independent renderer recovery. Browser downloads remain manual; eligible standalone launches prepare the initial map automatically with Cancel and retained retry suppression. See [offline API and lifecycle documentation](docs/OFFLINE-MAPS.md). This revision is awaiting physical-device acceptance and deployment.
 
-## UI fixes (0.6.1)
+## Backup feedback (0.6.2)
 
-Export success appears beneath the initiating button for five seconds; export errors stay there until retried, independently of import/general notices. The offline card title retains announcement focus without a decorative outline, while keyboard controls keep visible focus. The map card displays download size without asking users to check storage headroom; quota checks and actionable errors remain. Full saved-package startup verification is unchanged and is being investigated separately.
+Backup messages follow the [application feedback contract](docs/FEEDBACK.md). My passport export feedback spans the card content width. Import confirmations and cancellation expire after five seconds; chooser, progress, and error feedback remain local to their controls. Export says the backup was prepared, since the portable download API cannot confirm a file was saved. Native chooser activation and failure feedback are covered by browser tests; the reported physical-device Incognito issue still requires reproduction.
+
+## Previous UI fixes (0.6.1)
+
+Export preparation feedback appears beneath the initiating button for five seconds; export errors stay there until retried, independently of import/general notices. The offline card title retains announcement focus without a decorative outline, while keyboard controls keep visible focus. The map card displays download size without asking users to check storage headroom; quota checks and actionable errors remain. Full saved-package startup verification is unchanged and is being investigated separately.
 
 ## Development
 
