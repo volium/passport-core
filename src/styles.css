@@ -175,11 +175,10 @@ progress::-moz-progress-bar { background: var(--region, #438262); }
 
 #map-download, #map-replace { background:#256b53; color:white; border-color:#256b53; }
 
-.backup-actions:has(.export-action) { align-items:flex-start; }
 .export-action { flex:1 1 130px; }
 .export-action > button { width:100%; font-size:14px; line-height:1.4; }
-.export-action .export-feedback { margin:0; font-size:12px; }
-.export-action .export-feedback:not(:empty) { margin-top:8px; }
+.export-feedback { margin:0; font-size:12px; }
+.export-feedback:not(:empty) { margin-top:8px; }
 
 /* The card title receives announcement focus, but is not an interactive control. */
 #offline-heading:focus { outline:none; }

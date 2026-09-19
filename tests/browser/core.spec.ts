@@ -217,6 +217,8 @@ test('export feedback belongs to its button, expires, and leaves unrelated notic
   await page.evaluate(()=>{document.querySelector('#passport-notice')!.textContent='Existing import feedback';});
   const download=page.waitForEvent('download');await page.locator('#export').click();await download;
   await expect(page.locator('#export-status')).toContainText('Passport exported.');
+  const widths = await page.locator('.backup-actions').first().boundingBox();
+  expect((await page.locator('#export-status').boundingBox())!.width).toBeCloseTo(widths!.width, 0);
   await page.locator('#explore-tab').click();
   await page.locator('#storage-protection').click();
   const second=page.waitForEvent('download');await page.locator('#offline-export').click();await second;
