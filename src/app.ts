@@ -30,7 +30,7 @@ export class PassportApp {
   private initialMapFit = false;
   private previewOnly = false;
   private saveNoticeTimer?: ReturnType<typeof setTimeout>;
-  private exportNoticeTimers = new Map<HTMLElement, ReturnType<typeof setTimeout>>();
+  private feedbackTimers = new Map<HTMLElement, ReturnType<typeof setTimeout>>();
   constructor(private options: { program: PassportProgram; offlineShellReady?: () => Promise<boolean>; installationGuidance?: () => InstallationGuidance }) {
     validateProgram(options.program);
     this.store = new PassportStore(options.program.id);
@@ -411,25 +411,32 @@ export class PassportApp {
     finally { if (deleteButton?.isConnected) deleteButton.disabled = false; }
   }
 
+  /** Short confirmations expire; pending work and actionable errors remain visible. */
+  private feedback(selector: string, message: string, transient = false) {
+    if (this.events.signal.aborted) return;
+    const status = this.el(selector);
+    clearTimeout(this.feedbackTimers.get(status));
+    this.feedbackTimers.delete(status);
+    status.textContent = message;
+    if (transient) this.feedbackTimers.set(status, setTimeout(() => {
+      status.textContent = '';
+      this.feedbackTimers.delete(status);
+    }, 5000));
+  }
+
   private async export(statusSelector: string, buttonSelector: string) {
-    const status = this.el(statusSelector);
     const button = this.el<HTMLButtonElement>(buttonSelector);
     if (button.disabled) return;
-    clearTimeout(this.exportNoticeTimers.get(status));
-    this.exportNoticeTimers.delete(status);
-    status.textContent = '';
+    this.feedback(statusSelector, 'Preparing backup...');
     button.disabled = true;
     try {
       const backup: PassportBackup = { format: 'aviation-passport', schemaVersion: 1, programId: this.program.id, exportedAt: new Date().toISOString(), checkIns: await this.store.list(), attachments: [] };
       if (this.events.signal.aborted) return;
       const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
-      const link = document.createElement('a'); link.href = url; link.download = `${this.program.id}-passport.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 10000);
-      status.textContent = 'Passport exported. Keep the file to restore or transfer your visits.';
-      this.exportNoticeTimers.set(status, setTimeout(() => {
-        status.textContent = '';
-        this.exportNoticeTimers.delete(status);
-      }, 5000));
-    } catch { if (!this.events.signal.aborted) status.textContent = 'Could not read your passport for export. Check browser storage permissions.'; }
+      const link = document.createElement('a'); link.href = url; link.download = `${this.program.id}-passport.json`;
+      try { link.click(); } finally { setTimeout(() => URL.revokeObjectURL(url), 10000); }
+      this.feedback(statusSelector, 'Backup prepared. Save the file from your browser to keep a copy of your visits.', true);
+    } catch { this.feedback(statusSelector, 'Could not prepare your backup. Check browser storage permissions and try again.'); }
     finally { button.disabled = false; }
   }
 
@@ -445,5 +452,5 @@ export class PassportApp {
     finally { input.value = ''; }
   }
 
-  async destroy() { for (const timer of this.exportNoticeTimers.values()) clearTimeout(timer); this.exportNoticeTimers.clear(); clearTimeout(this.saveNoticeTimer); this.events.abort(); this.resize?.disconnect(); this.unsubscribeMap?.(); this.offlineUI?.destroy(); this.offline?.close(); this.map?.remove(); await this.offline?.storage.close(); await this.store.close(); this.root.replaceChildren(); this.root.classList.remove('passport-app'); }
+  async destroy() { for (const timer of this.feedbackTimers.values()) clearTimeout(timer); this.feedbackTimers.clear(); clearTimeout(this.saveNoticeTimer); this.events.abort(); this.resize?.disconnect(); this.unsubscribeMap?.(); this.offlineUI?.destroy(); this.offline?.close(); this.map?.remove(); await this.offline?.storage.close(); await this.store.close(); this.root.replaceChildren(); this.root.classList.remove('passport-app'); }
 }
