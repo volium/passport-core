@@ -27,7 +27,7 @@ export class PassportApp {
   private resize?: ResizeObserver;
   private lastFocus?: HTMLElement;
   private passportOpen = false;
-  private initialMapFit = false;
+  private followInitialMapLayout = true;
   private previewOnly = false;
   private saveNoticeTimer?: ReturnType<typeof setTimeout>;
   private feedbackTimers = new Map<HTMLElement, ReturnType<typeof setTimeout>>();
@@ -98,10 +98,12 @@ export class PassportApp {
     this.resize = new ResizeObserver(() => {
       if (this.el('#map').clientWidth && this.el('#map').clientHeight) {
         this.map.invalidateSize();
-        if (!this.initialMapFit) this.initialMapFit = this.fitMatchingAirports();
+        if (this.followInitialMapLayout) this.fitMatchingAirports();
       }
     });
     this.resize.observe(this.el('#map'));
+    for (const element of this.root.querySelectorAll<HTMLElement>('.map-caption, .maplibregl-ctrl-top-right, .maplibregl-ctrl-bottom-right')) this.resize.observe(element, {box:'border-box'});
+    for (const event of ['pointerdown', 'wheel', 'keydown']) this.el('#map').addEventListener(event, () => { this.followInitialMapLayout = false; }, {capture:true,signal:this.events.signal});
     this.el<HTMLInputElement>('#search').addEventListener('input', event => { this.filters.query = (event.target as HTMLInputElement).value; this.render(); });
     this.el('#region').addEventListener('change', event => { this.filters.regionId = (event.target as HTMLSelectElement).value; this.render(); });
     this.el('#visited').addEventListener('change', event => { this.filters.visited = (event.target as HTMLSelectElement).value as AirportFilters['visited']; this.render(); });
@@ -112,7 +114,7 @@ export class PassportApp {
     }));
     this.el('#preview-details').addEventListener('click', () => { this.renderDetail(); this.el('#close-detail').focus(); });
     this.el('#preview-close').addEventListener('click', () => this.closeDetail(false));
-    this.el('#fit').addEventListener('click', () => this.fitMatchingAirports());
+    this.el('#fit').addEventListener('click', () => { this.followInitialMapLayout = false; this.fitMatchingAirports(); });
     this.el('#export').addEventListener('click', () => void this.export('#export-status', '#export'));
     this.el('#import-button').addEventListener('click', () => {
       this.feedback('#passport-notice', 'Choose a passport JSON backup. If the chooser stays closed, save unfinished visits before reloading.');
@@ -158,7 +160,7 @@ export class PassportApp {
     try { this.visits = await this.store.list(); this.el('#offline-visits').textContent = 'Passport storage: available on this device.'; }
     catch { this.el('#offline-visits').textContent = 'Passport storage: unavailable.'; this.announce('Device storage could not be opened. Check browser storage permissions before saving visits.'); }
     this.render();
-    if (!this.initialMapFit) this.initialMapFit = this.fitMatchingAirports();
+    if (this.followInitialMapLayout) this.fitMatchingAirports();
     this.root.inert = false;
     this.root.setAttribute('aria-busy','false');
     this.offlineUI?.start();
@@ -169,15 +171,35 @@ export class PassportApp {
     if (!container.clientWidth || !container.clientHeight) return false;
     const airports = filterAirports(this.program, this.visits, this.filters);
     if (!airports.length) return true;
-    // Leave room for the marker outlines, labels, and controls inside the map.
-    const topControls = (this.el('.maplibregl-ctrl-group')?.offsetHeight ?? 0);
-    const top = Math.min(topControls + 24, container.clientHeight / 4);
-    const bottom = Math.min(this.el('.map-caption').offsetHeight + 48, container.clientHeight / 4);
-    const horizontal = Math.min(36, container.clientWidth / 4);
-    this.map.fitBounds(airports.map(a => [a.location.latitude, a.location.longitude] as [number, number]), {
-      paddingTopLeft: [horizontal, top], paddingBottomRight: [horizontal, bottom],
+    this.map.invalidateSize();
+    // Keep target/label margins; reserve overlay space only where targets overlap.
+    const margin = Math.min(24, container.clientWidth / 4, container.clientHeight / 4);
+    const labelBottom = Math.min(40, container.clientHeight / 4);
+    let top = margin, bottom = labelBottom;
+    const points = airports.map(a => [a.location.latitude, a.location.longitude] as [number, number]);
+    const fit = () => this.map.fitBounds(points, {
+      paddingTopLeft: [margin, top], paddingBottomRight: [margin, bottom],
       maxZoom: airports.length === 1 ? 10 : 19, animate: false,
     });
+    fit();
+    const bounds = container.getBoundingClientRect();
+    const controls = this.el('.maplibregl-ctrl-group')?.getBoundingClientRect();
+    // The caption spans the map, but only its children cover map content.
+    const lowerControls = [...this.root.querySelectorAll<HTMLElement>('.map-caption > *, .maplibregl-ctrl-attrib')]
+      .map(element => element.getBoundingClientRect()).filter(rect => rect.width && rect.height);
+    const overlaps = (rect: DOMRect, below: number) => points.some(point => {
+      const p = this.map.latLngToContainerPoint(point);
+      const x = bounds.left + p.x, y = bounds.top + p.y;
+      return x + margin > rect.left && x - margin < rect.right && y + below > rect.top && y - margin < rect.bottom;
+    });
+    // Recheck after fitting: clearing one overlay can move a target toward another.
+    for (let pass = 0; pass < 3; pass++) {
+      let nextTop = top, nextBottom = bottom;
+      if (controls?.width && controls.height && overlaps(controls, labelBottom)) nextTop = Math.max(top, controls.bottom - bounds.top + margin);
+      for (const rect of lowerControls) if (overlaps(rect, labelBottom)) nextBottom = Math.max(nextBottom, bounds.bottom - rect.top + labelBottom);
+      if (nextTop === top && nextBottom === bottom) break;
+      top = nextTop; bottom = nextBottom; fit();
+    }
     return true;
   }
 

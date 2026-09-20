@@ -346,3 +346,34 @@ test('foreground reconciliation preserves the offline banner and expanded repair
   await expect(page.locator('#map-repair')).toHaveAttribute('open','');
   await expect(page.locator('#map-replace')).toBeEnabled();
 });
+
+
+for (const viewport of [{width:1440,height:900},{width:390,height:844}]) {
+  test('initial fit matches explicit fit after late layout changes at '+viewport.width, async ({page}) => {
+    await page.setViewportSize(viewport);
+    await page.goto('/tests/browser/app.html');
+    await expect(page.locator('#map')).toHaveAttribute('data-basemap-state','ready');
+    await page.evaluate(async()=>{
+      // Model a late change in header/caption layout after the first fit.
+      document.querySelector<HTMLElement>('.map-caption')!.style.bottom='36px';
+      document.querySelector<HTMLElement>('.map-caption')!.style.paddingTop='12px';
+      await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
+    });
+    const camera=()=>page.evaluate(()=>{
+      const map=(window as unknown as {fixtureApp:{map:{map:import('maplibre-gl').Map}}}).fixtureApp.map.map;
+      return {zoom:map.getZoom(),lng:map.getCenter().lng,lat:map.getCenter().lat};
+    });
+    const initial=await camera();await page.locator('#fit').click();const fitted=await camera();
+    expect(fitted.zoom).toBeCloseTo(initial.zoom,7);expect(fitted.lng).toBeCloseTo(initial.lng,7);expect(fitted.lat).toBeCloseTo(initial.lat,7);
+    await page.reload();await expect(page.locator('#map')).toHaveAttribute('data-basemap-state','ready');
+    const box=await page.locator('#map').boundingBox();await page.mouse.move(box!.x+box!.width/2,box!.y+box!.height/2);
+    const before=await camera();await page.mouse.wheel(0,-200);await expect.poll(async()=>(await camera()).zoom).toBeGreaterThan(before.zoom);
+    await page.evaluate(async()=>{
+      const map=(window as unknown as {fixtureApp:{map:{map:import('maplibre-gl').Map}}}).fixtureApp.map.map;
+      if(map.isMoving())await new Promise<void>(resolve=>map.once('moveend',()=>resolve()));
+    });
+    const chosen=await camera();
+    await page.evaluate(async()=>{document.querySelector<HTMLElement>('.map-caption')!.style.paddingTop='20px';await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));});
+    expect((await camera()).zoom).toBeCloseTo(chosen.zoom,7);
+  });
+}

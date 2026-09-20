@@ -142,7 +142,7 @@ export class PassportMap {
   fitBounds(points:LatLon[],options:{paddingTopLeft:[number,number];paddingBottomRight:[number,number];maxZoom:number;animate:boolean}){
     const bounds=new this.gl.LngLatBounds();points.forEach(p=>bounds.extend([p[1],p[0]]));
     const camera=this.map.cameraForBounds(bounds,{padding:{left:options.paddingTopLeft[0],top:options.paddingTopLeft[1],right:options.paddingBottomRight[0],bottom:options.paddingBottomRight[1]},maxZoom:options.maxZoom});
-    if(camera)this.map.jumpTo({...camera,zoom:Math.floor((camera.zoom??this.getZoom())*4)/4});
+    if(camera)this.map.jumpTo(camera);
   }
   on(event:string,callback:()=>void){for(const name of event.split(' '))this.map.on(name as 'click',callback)}
   remove(){this.map.remove();this.gl.removeProtocol(this.assetProtocol);this.gl.removeProtocol('pmtiles')}
