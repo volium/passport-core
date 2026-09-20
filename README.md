@@ -94,3 +94,7 @@ Saved visit confirmations keep the active button's green visual identity in a mu
 ## Saved-map startup (0.6.4)
 
 Previously verified maps reopen using manifest, chunk-key presence, style, and header checks, without a recurring whole-package checksum scan. Downloads, updates, and explicit rollback still receive full verification. See [startup assurance and adapter requirements](docs/OFFLINE-MAPS.md#saved-map-startup-assurance). Physical-device startup timing remains to be validated.
+
+## Planned Passport collection
+
+The approved next Passport direction keeps expandable regional progress cards and adds My stamps with alphabetical/collection-order views and same-date drag ordering. First visits collect one stamp per airport; repeat visits remain history. This is documentation only, not implemented. See [the specification and pending schema decisions](docs/PASSPORT-COLLECTION.md) and Planning.md Section 25 / Phase P1.
