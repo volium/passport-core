@@ -90,3 +90,7 @@ Core 0.4.4: airport cards, map labels, accessible marker names, and detail headi
 Core 0.4.5: mobile marker taps open a compact airport preview with name, visit status, region, and an explicit View details action. List selections and desktop selections open details directly. Mobile hides zoom buttons and uses 1.5px marker/legend outlines; desktop uses 3px. General labels appear together for visible airports when spacing permits from two zoom levels earlier; crowded views suppress general labels while preserving the selected label. Panning recomputes label visibility.
 
 Saved visit confirmations keep the active button's green visual identity in a muted light/dark treatment while remaining disabled for four seconds. Deleted-visit confirmations retain their neutral disabled styling.
+
+## Saved-map startup (0.6.4)
+
+Previously verified maps reopen using manifest, chunk-key presence, style, and header checks, without a recurring whole-package checksum scan. Downloads, updates, and explicit rollback still receive full verification. See [startup assurance and adapter requirements](docs/OFFLINE-MAPS.md#saved-map-startup-assurance). Physical-device startup timing remains to be validated.

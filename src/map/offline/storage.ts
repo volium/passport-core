@@ -10,6 +10,8 @@ interface MapDatabase extends DBSchema {
 }
 export interface MapStorage {
   inventory(): Promise<MapInventory>;
+  /** Check every expected chunk key without reading payloads. Not an integrity check. */
+  checkPresence(installed: InstalledMap): Promise<void>;
   activate(next: InstalledMap): Promise<void>;
   setInventory(value: MapInventory): Promise<void>;
   write(generation: string, resource: string, index: number, bytes: Uint8Array): Promise<void>;
@@ -30,6 +32,17 @@ export class IndexedMapStorage implements MapStorage {
     });
   }
   async inventory() { return await (await this.open()).get('inventory', 'installed') ?? {}; }
+  async checkPresence(installed: InstalledMap) {
+    const tx = (await this.open()).transaction('chunks');
+    const keys = await tx.store.getAllKeys(IDBKeyRange.bound([installed.generation], [installed.generation, []]));
+    await tx.done;
+    const present = new Set(keys.map(key => JSON.stringify([key[1], key[2]])));
+    for (const resource of [{id:'archive',sizeBytes:installed.package.sizeBytes}, ...installed.package.resources]) {
+      for (let index = 0; index < Math.ceil(resource.sizeBytes / CHUNK_BYTES); index++) {
+        if (!present.has(JSON.stringify([resource.id,index]))) throw new Error('Map bytes are missing or evicted');
+      }
+    }
+  }
   async setInventory(value: MapInventory) { await (await this.open()).put('inventory', value, 'installed'); }
   async activate(next: InstalledMap) {
     const tx = (await this.open()).transaction('inventory', 'readwrite');

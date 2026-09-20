@@ -324,3 +324,25 @@ test('a cancelled picker can be retried with a fresh input and stale events cann
   await page.evaluate(() => (window as unknown as {cancelledInput:HTMLInputElement}).cancelledInput.dispatchEvent(new Event('cancel', {bubbles:true})));
   await expect(page.locator('#passport-notice')).toContainText('Imported 0 visits');
 });
+
+
+test('foreground reconciliation preserves the offline banner and expanded repair options', async ({page}) => {
+  await page.goto('/tests/browser/app.html');
+  await page.locator('#offline-access').click();
+  await page.locator('#map-download').click();
+  await expect(page.locator('#map-status')).toContainText('Map available on this device');
+  await page.evaluate(async()=>{
+    const app=(window as unknown as {fixtureApp:{offline:{download:()=>Promise<void>}}}).fixtureApp;
+    await app.offline.download();
+  });
+  await page.locator('#map-repair summary').click();
+  const states=await page.evaluate(async()=>{
+    const app=(window as unknown as {fixtureApp:{offline:{subscribe:(fn:(s:{state:string})=>void)=>()=>void},offlineUI:{refresh:()=>Promise<void>}}}).fixtureApp;
+    const seen:string[]=[];const unsubscribe=app.offline.subscribe(s=>seen.push(s.state));
+    await app.offlineUI.refresh();await app.offlineUI.refresh();unsubscribe();return seen;
+  });
+  expect(states).not.toContain('checking');
+  await expect(page.locator('#offline-summary')).toHaveText('Map available offline');
+  await expect(page.locator('#map-repair')).toHaveAttribute('open','');
+  await expect(page.locator('#map-replace')).toBeEnabled();
+});

@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { OfflineMapManager } from '../src/map/offline/manager.js';
-import { IndexedMapStorage } from '../src/map/offline/storage.js';
+import { CHUNK_BYTES, IndexedMapStorage } from '../src/map/offline/storage.js';
 import { validateMapPackage } from '../src/map/contracts.js';
 
 import { fixture } from './map-fixture.js';
@@ -134,4 +134,77 @@ it('makes one fresh protection request after switching from browser to standalon
   const manager=new OfflineMapManager('test',p,storage,{...env,persistenceContext:()=>context,persisted:async()=>false,persist:async()=>{requests++;return false;}});
   await manager.protection(true);await manager.protection(true);expect(requests).toBe(1);
   context='standalone';await manager.protection(true);await manager.protection(true);expect(requests).toBe(2);await storage.close();
+});
+
+
+describe('lightweight saved-map reopening', () => {
+  async function largeFixture() {
+    const f = await fixture();
+    const archive = new Uint8Array(3 * CHUNK_BYTES); archive.set(f.archive);
+    const {createSHA256} = await import('hash-wasm');
+    const p = {...f.p,sizeBytes:archive.length,sha256:(await createSHA256()).update(archive).digest()};
+    const env = {...f.env,fetch:async (input: RequestInfo | URL) => String(input) === p.url ? new Response(archive) : f.env.fetch(input)};
+    const program = crypto.randomUUID();
+    const storage = new IndexedMapStorage(program,p.id);
+    const manager = new OfflineMapManager(program,p,storage,env);
+    await manager.download(); expect(manager.status.state).toBe('installed');
+    return {p,env,program,storage,manager};
+  }
+  it('reopens and refreshes without network or full payload scans, including older installed versions', async () => {
+    const {p,env,storage,manager} = await largeFixture();
+    const read = vi.spyOn(storage,'read');
+    const next = new OfflineMapManager('test',{...p,version:'new'},storage,{...env,fetch:async()=>{throw Error('offline')}});
+    await next.check(); await next.check();
+    expect(next.status.state).toBe('installed'); expect(next.status.updateAvailable).toBe(true);
+    expect(read.mock.calls.reduce((sum,args)=>sum+args[3],0)).toBeLessThan(CHUNK_BYTES);
+    expect(read.mock.calls.filter(args=>args[1]==='archive').every(args=>args[2]===0)).toBe(true);
+    // Bytes outside the initial view are still available on demand offline.
+    expect((await next.source(next.status.active!).getBytes(2*CHUNK_BYTES,100)).data.byteLength).toBe(100);
+    manager.close(); next.close(); await storage.close();
+  });
+  it.each(['archive','style'])('detects missing %s records by key without scanning payloads', async resource => {
+    const {p,env,program,storage,manager} = await largeFixture();
+    const {openDB} = await import('idb');
+    const db = await openDB('passport-maps:'+encodeURIComponent(program)+':'+encodeURIComponent(p.id));
+    await db.delete('chunks',[manager.status.active!.generation,resource,resource==='archive'?2:0]); db.close();
+    await manager.check(); expect(manager.status.state).toBe('missing'); expect(manager.status.active).toBeUndefined();
+    const next = new OfflineMapManager(program,p,storage,env); await next.check(); expect(next.status.state).toBe('missing');
+    manager.close(); next.close(); await storage.close();
+  });
+  it('defers unread tail corruption, but full rollback verification rejects it and truncated reads invalidate availability', async () => {
+    const {p,env,storage,manager} = await largeFixture();
+    const old = manager.status.active!;
+    const tail = new Uint8Array(CHUNK_BYTES); tail[0]=42;
+    await storage.write(old.generation,'archive',2,tail);
+    await manager.check(); expect(manager.status.state).toBe('installed');
+    const next = new OfflineMapManager('test',{...p,version:'2'},storage,env); await next.download();
+    await expect(next.rollback()).rejects.toThrow('integrity');
+    expect((await storage.inventory()).active!.package.version).toBe('2');
+    const active = next.status.active!;
+    await storage.write(active.generation,'archive',2,new Uint8Array(1));
+    await expect(next.source(active).getBytes(2*CHUNK_BYTES,100)).rejects.toThrow('missing');
+    expect(next.status.state).toBe('missing');
+    manager.close(); next.close(); await storage.close();
+  });
+  it('still rejects corrupted stored bytes before activating a download', async () => {
+    const {p,env}=await fixture();const storage=new IndexedMapStorage(crypto.randomUUID(),p.id);
+    const write=storage.write.bind(storage);
+    vi.spyOn(storage,'write').mockImplementation(async(g,r,i,bytes)=>{const copy=bytes.slice();if(r==='archive')copy[127]^=1;await write(g,r,i,copy);});
+    const manager=new OfflineMapManager('test',p,storage,env);await manager.download();
+    expect(manager.status.state).toBe('integrity-failed');expect((await storage.inventory()).active).toBeUndefined();
+    manager.close();await storage.close();
+  });
+});
+
+
+it('silently reconciles a settled map without rereading payloads, but reports eviction', async () => {
+  const {p,env}=await fixture();const storage=new IndexedMapStorage(crypto.randomUUID(),p.id);
+  const installed=new OfflineMapManager('test',p,storage,env);await installed.download();
+  const reopened=new OfflineMapManager('test',p,storage,env);await reopened.check();
+  const states:string[]=[];reopened.subscribe(s=>states.push(s.state));
+  const reads=vi.spyOn(storage,'read');await reopened.check();await reopened.check();
+  expect(states.every(state=>state==='installed')).toBe(true);expect(reads).not.toHaveBeenCalled();
+  await storage.remove(reopened.status.active!.generation);await reopened.check();
+  expect(reopened.status.state).toBe('missing');expect(reopened.status.active).toBeUndefined();
+  installed.close();reopened.close();await storage.close();
 });

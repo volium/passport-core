@@ -37,6 +37,8 @@ export class OfflineMapManager {
   private checking?: Promise<void>;
   private protectionCheck?: Promise<void>;
   private closed = false;
+  private inventoryChecked = false;
+  private validatedGeneration?: string;
   private channel?: BroadcastChannel;
   private listeners = new Set<(status: OfflineMapStatus) => void>();
   constructor(readonly programId: string, readonly advertised: OfflineMapPackage, readonly storage: MapStorage, private env: MapEnvironment) {
@@ -79,6 +81,19 @@ export class OfflineMapManager {
       }
       if (hash.digest() !== resource.sha256) throw new IntegrityError('Map integrity check failed');
     }
+    await this.validateRenderingMetadata(installed);
+    this.validatedGeneration = installed.generation;
+  }
+  private async reopen(installed: InstalledMap) {
+    validateMapPackage(installed.package);
+    if (!installed.generation || installed.package.id !== this.advertised.id) throw new IntegrityError('Installed map identity is invalid');
+    await this.storage.checkPresence(installed);
+    if (this.validatedGeneration !== installed.generation) {
+      await this.validateRenderingMetadata(installed);
+      this.validatedGeneration = installed.generation;
+    }
+  }
+  private async validateRenderingMetadata(installed: InstalledMap) {
     for (const id of new Set([installed.package.lightStyleResourceId, installed.package.darkStyleResourceId])) {
       const r = installed.package.resources.find(r => r.id === id)!;
       validateStyleResources(JSON.parse(new TextDecoder().decode(await this.storage.read(installed.generation, id, 0, r.sizeBytes))), installed.package);
@@ -121,20 +136,22 @@ export class OfflineMapManager {
   }
   private async checkInventory() {
     if (this.abort) return;
-    this.emit({ state: 'checking', error: undefined });
+    // Keep settled UI and the active renderer stable during foreground reconciliation.
+    if (!this.inventoryChecked) this.emit({ state: 'checking', error: undefined });
     try {
       await this.lock(async () => {
         const inventory = await this.storage.inventory();
         this.emit({rollbackAvailable:!!inventory.previous});
         if (inventory.active) {
-          try { await this.verify(inventory.active); }
+          try { await this.reopen(inventory.active); }
           catch (error) { this.emit({ state: 'missing', active: undefined, updateAvailable: false, error: String(error) }); return; }
         }
         const reclaimedBytes = await this.storage.clean([inventory.active?.generation, inventory.previous?.generation].filter((v): v is string => !!v));
         if (reclaimedBytes) this.emit({ reclaimedBytes });
-        this.emit({ state: inventory.active ? 'installed' : inventory.control?.attempt === 'cancelled' ? 'cancelled' : inventory.control?.attempt === 'installed' ? 'missing' : inventory.control?.attempt ? 'failed' : 'not-downloaded', active: inventory.active, updateAvailable: !!inventory.active && inventory.active.package.version !== this.advertised.version });
+        this.emit({ state: inventory.active ? 'installed' : inventory.control?.attempt === 'cancelled' ? 'cancelled' : inventory.control?.attempt === 'installed' ? 'missing' : inventory.control?.attempt ? 'failed' : 'not-downloaded', active: inventory.active, updateAvailable: !!inventory.active && inventory.active.package.version !== this.advertised.version, error: undefined });
       });
     } catch (error) { this.emit({ state: 'failed', active: undefined, error: String(error) }); }
+    finally { this.inventoryChecked = true; }
   }
   close() { this.closed = true; this.abort?.abort(); this.channel?.close(); this.listeners.clear(); }
   cancel() {
@@ -207,7 +224,7 @@ export class OfflineMapManager {
       const active = await this.storage.inventory().catch((): MapInventory => ({}));
       if (active.active?.generation !== installed.generation) await this.storage.remove(installed.generation).catch(() => {});
       let retained = active.active;
-      if (retained) { try { await this.verify(retained); } catch { retained = undefined; } }
+      if (retained) { try { await this.reopen(retained); } catch { retained = undefined; } }
       if (abort.signal.aborted) await this.lock(async () => { const value = await this.storage.inventory(); await this.storage.setInventory({...value,control:{...value.control,attempt:'cancelled'}}); }).catch(() => {});
       this.emit({ state: abort.signal.aborted ? 'cancelled' : error instanceof IntegrityError ? 'integrity-failed' : error instanceof DOMException && error.name === 'QuotaExceededError' ? 'insufficient-storage' : 'failed', active: retained, error: abort.signal.aborted ? 'Download interrupted. Retry when ready.' : String(error) });
     } finally { this.abort = undefined; }

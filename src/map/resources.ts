@@ -7,7 +7,8 @@ export function validateStyleResources(style: StyleSpecification, p: OfflineMapP
   if (validateStyleMin(style).length) throw new Error('Invalid MapLibre style');
   const fail = () => { throw new Error('Style references unsupported or unlisted offline resources'); };
   const normalize = (url: string) => new URL(url, 'https://program.invalid/').href;
-  const present = (url: string) => p.resources.some(r => normalize(r.url) === normalize(url));
+  const resourceUrls = new Set(p.resources.map(resource => normalize(resource.url)));
+  const present = (url: string) => resourceUrls.has(normalize(url));
   if (style.version !== 8 || !Array.isArray(style.layers) || !style.sources || 'imports' in style) fail();
   for (const [id, source] of Object.entries(style.sources)) {
     if (id !== 'basemap' || source.type !== 'vector' || source.url !== `pmtiles://${p.url}` || source.tiles) fail();
