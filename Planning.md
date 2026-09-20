@@ -1875,7 +1875,7 @@ The actual schema should be formally documented and tested.
 
 The application must support restoring a compatible export.
 
-Show local feedback when opening the file chooser, while importing, on cancellation, and on success or failure. Import completion stays in My passport even if the user switches tabs during the operation. Clear successful import and cancellation feedback after five seconds; retain actionable errors until retry. Handle file-access and storage failures without assuming private browsing is unsupported. Private-browser acceptance must include the actual device file chooser; automated file injection alone is insufficient.
+Show local feedback when opening the file chooser, while importing, on a no-selection result, and on success or failure. A no-selection result must not imply that the user deliberately cancelled. Each user-triggered attempt uses a fresh file input while preserving app state; this recovery candidate still requires Chrome iOS device validation after export/save. Import completion stays in My passport even if the user switches tabs during the operation. Clear successful import and cancellation feedback after five seconds; retain actionable errors until retry. Handle file-access and storage failures without assuming private browsing is unsupported. Private-browser acceptance must include the actual device file chooser; automated file injection alone is insufficient.
 
 Import should:
 

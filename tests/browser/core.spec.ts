@@ -248,7 +248,7 @@ test('import chooser, cancellation, confirmations and failures give local feedba
   await page.locator('#import-button').click(); await chooser;
   await expect(page.locator('#passport-notice')).toContainText('Choose a passport JSON backup');
   await page.locator('#import').dispatchEvent('cancel');
-  await expect(page.locator('#passport-notice')).toContainText('Import cancelled');
+  await expect(page.locator('#passport-notice')).toContainText('No file selected');
   const backup = { name:'backup.json', mimeType:'application/json', buffer:Buffer.from(JSON.stringify({format:'aviation-passport',schemaVersion:1,programId:'independent-core',exportedAt:new Date().toISOString(),checkIns:[],attachments:[]})) };
   await page.locator('#import').setInputFiles(backup);
   await expect(page.locator('#passport-notice')).toContainText('Imported 0 visits');
@@ -297,4 +297,30 @@ test('an import finishing after a tab change stays in My passport', async ({ pag
   await page.evaluate(() => (window as unknown as {finishImport:()=>void}).finishImport());
   await expect(page.locator('#passport-notice')).toContainText('Imported 0 visits');
   await expect(page.locator('#notice')).not.toContainText('Imported');
+});
+
+
+test('a cancelled picker can be retried with a fresh input and stale events cannot replace its result', async ({ page }) => {
+  await page.goto('/tests/browser/app.html');
+  await page.locator('#passport-tab').click();
+  await page.evaluate(() => {
+    const nativeClick = HTMLInputElement.prototype.click;
+    HTMLInputElement.prototype.click = function () {
+      if (this.id !== 'import') return nativeClick.call(this);
+      (window as unknown as {cancelledInput:HTMLInputElement}).cancelledInput = this;
+      // A browser aborts selection without opening its picker.
+      this.dispatchEvent(new Event('cancel', {bubbles:true}));
+      HTMLInputElement.prototype.click = nativeClick;
+      this.click = () => this.dispatchEvent(new Event('cancel', {bubbles:true}));
+    };
+  });
+  await page.locator('#import-button').click();
+  await expect(page.locator('#passport-notice')).toContainText('No file selected');
+  await expect(page.locator('#import-button')).toBeEnabled();
+  const chooser = page.waitForEvent('filechooser');
+  await page.locator('#import-button').click();
+  await (await chooser).setFiles({name:'backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'aviation-passport',schemaVersion:1,programId:'independent-core',exportedAt:new Date().toISOString(),checkIns:[],attachments:[]}))});
+  await expect(page.locator('#passport-notice')).toContainText('Imported 0 visits');
+  await page.evaluate(() => (window as unknown as {cancelledInput:HTMLInputElement}).cancelledInput.dispatchEvent(new Event('cancel', {bubbles:true})));
+  await expect(page.locator('#passport-notice')).toContainText('Imported 0 visits');
 });

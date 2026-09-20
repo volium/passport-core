@@ -115,13 +115,22 @@ export class PassportApp {
     this.el('#fit').addEventListener('click', () => this.fitMatchingAirports());
     this.el('#export').addEventListener('click', () => void this.export('#export-status', '#export'));
     this.el('#import-button').addEventListener('click', () => {
-      this.feedback('#passport-notice', 'Choose a passport JSON backup. If no file chooser opens, try a regular browser tab.');
+      this.feedback('#passport-notice', 'Choose a passport JSON backup. If the chooser stays closed, save unfinished visits before reloading.');
       const input = this.el<HTMLInputElement>('#import');
-      try { input.click(); }
-      catch { this.feedback('#passport-notice', 'The file chooser could not be opened. Try again in a regular browser tab.'); }
+      // Keep activation synchronous, but do not reuse a previous picker element.
+      const freshInput = input.cloneNode(false) as HTMLInputElement;
+      freshInput.value = '';
+      input.replaceWith(freshInput);
+      try { freshInput.click(); }
+      catch { this.feedback('#passport-notice', 'The file chooser could not be opened. Save unfinished visits before reloading and trying again.'); }
     });
-    this.el('#import').addEventListener('cancel', () => this.feedback('#passport-notice', 'Import cancelled. No visits were changed.', true));
-    this.el('#import').addEventListener('change', event => void this.import(event.target as HTMLInputElement));
+    // Delegate so replacement inputs work and detached inputs cannot update feedback.
+    this.root.addEventListener('cancel', event => {
+      if (event.target === this.el('#import') && !this.el<HTMLButtonElement>('#import-button').disabled) this.noImportSelection();
+    }, { signal: this.events.signal });
+    this.root.addEventListener('change', event => {
+      if (event.target === this.el('#import')) void this.import(event.target as HTMLInputElement);
+    }, { signal: this.events.signal });
     const tabs = [this.el('#explore-tab'), this.el('#passport-tab')];
     tabs.forEach((tab, index) => {
       tab.addEventListener('click', () => this.setPassportOpen(index === 1));
@@ -447,11 +456,15 @@ export class PassportApp {
     finally { button.disabled = false; }
   }
 
+  private noImportSelection() {
+    this.feedback('#passport-notice', 'No file selected. Try Import again. If the chooser stays closed, save unfinished visits before reloading.', true);
+  }
+
   private async import(input: HTMLInputElement) {
     const button = this.el<HTMLButtonElement>('#import-button');
     if (button.disabled) return;
     const file = input.files?.[0];
-    if (!file) { this.feedback('#passport-notice', 'Import cancelled. No visits were changed.', true); return; }
+    if (!file) { this.noImportSelection(); return; }
     this.feedback('#passport-notice', 'Importing passport...');
     button.disabled = true;
     let merged = false;

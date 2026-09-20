@@ -23,9 +23,15 @@ The current portable export creates JSON and requests a download using an anchor
 
 ## Import and private browsing
 
-Activate the native file chooser synchronously from the user's button press, using the input's click method. Show instructions immediately and catch opening errors. Handle file cancellation, invalid or oversized JSON, program/schema mismatch, file-read failure, and storage-write failure. Preserve the existing add-only atomic merge and allow retrying the same file. If the merge succeeded but refreshing the view failed, report that distinction instead of claiming no data changed.
+Activate the native file chooser synchronously from the user's button press, using a fresh file input's click method for each attempt. Delegate selection/cancellation events from the app root; detached inputs must not change feedback for a newer attempt. Show instructions immediately and catch opening errors. Handle file cancellation, invalid or oversized JSON, program/schema mismatch, file-read failure, and storage-write failure. Preserve the existing add-only atomic merge and allow retrying the same file. If the merge succeeded but refreshing the view failed, report that distinction instead of claiming no data changed.
 
-The [HTML file-input specification](https://html.spec.whatwg.org/multipage/input.html#file-upload-state-(type=file)) defines selection and cancellation; file-picker activation must stay in the user gesture. In the tested WebKit build, showPicker on a hidden input returned without a chooser, while click opened it; the implementation therefore uses click. A browser that silently refuses to open its native picker may supply neither cancellation nor an exception: retain the helpful chooser instructions, with a regular-tab fallback, rather than inventing a successful import or a timeout failure.
+The [HTML file-input specification](https://html.spec.whatwg.org/multipage/input.html#file-upload-state-(type=file)) defines selection and cancellation; file-picker activation must stay in the user gesture. In the tested WebKit build, showPicker on a hidden input returned without a chooser, while click opened it; the implementation therefore uses click. A browser that silently refuses to open its native picker may supply neither cancellation nor an exception: retain the helpful chooser instructions, with a reminder to save unfinished visits before reloading, rather than inventing a successful import or a timeout failure.
+
+## No-selection recovery (0.6.3)
+
+Chrome iOS device testing shows an intermittent no-selection result after exporting and saving in both normal and Incognito modes, with reload restoring Import. Incognito is not a necessary trigger. Our former cancellation wording was misleading: the browser can return without a selected file even when the user did not press Cancel. Both a cancel event and an empty change result now show **No file selected. Try Import again. If the chooser stays closed, save unfinished visits before reloading.** This remains transient for five seconds.
+
+Each explicit attempt creates a fresh input, preserving the rest of the app and any unfinished visits. This is a recovery candidate for state tied to an input element, not a confirmed fix for Chrome's native Save/Share or file-picker state. There is no automatic retry or reload and no delay that could lose user activation. No visits are read or written on the no-selection path. Physical Chrome iOS verification of export/save/import is required before declaring the reported defect fixed.
 
 ## Audit and acceptance
 

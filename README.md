@@ -6,6 +6,10 @@ Program-independent TypeScript implementation for local aviation passports. This
 
 The approved Offline access card is implemented with persistent numeric progress, reusable installation guidance, automatic storage-protection checking, and independent renderer recovery. Browser downloads remain manual; eligible standalone launches prepare the initial map automatically with Cancel and retained retry suppression. See [offline API and lifecycle documentation](docs/OFFLINE-MAPS.md). This revision is awaiting physical-device acceptance and deployment.
 
+## Import recovery candidate (0.6.3)
+
+Each Import attempt uses a fresh file input and neutral no-selection feedback. This preserves visits and unfinished forms, ignores events from detached inputs, and does not automatically reload or retry. The intermittent Chrome iOS import failure after saving an export remains unconfirmed as fixed; physical-device acceptance is required. See [the feedback contract](docs/FEEDBACK.md).
+
 ## Backup feedback (0.6.2)
 
 Backup messages follow the [application feedback contract](docs/FEEDBACK.md). My passport export feedback spans the card content width. Import confirmations and cancellation expire after five seconds; chooser, progress, and error feedback remain local to their controls. Export says the backup was prepared, since the portable download API cannot confirm a file was saved. Native chooser activation and failure feedback are covered by browser tests; the reported physical-device Incognito issue still requires reproduction.
