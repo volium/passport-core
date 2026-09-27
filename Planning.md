@@ -4,7 +4,7 @@
 
 ## Architecture, Requirements, and Implementation Plan
 
-**Passport implementation candidate (2026-09-26):** After the planning commits, the owner authorized implementation. Core 0.7.0 now implements Phase P1 locally, with additive database v2 migration and v2 backups (v1 import retained), expandable regional cards, My stamps, date-restricted drag/keyboard ordering, and confirmation/reconciliation. The schema and conflict decisions are recorded in [docs/PASSPORT-COLLECTION.md](docs/PASSPORT-COLLECTION.md). Implementation remains uncommitted and unpushed pending owner testing. Earlier planning/milestone notices below are historical.
+**Passport implementation status (2026-09-26):** Core 0.7.0 implemented Phase P1 and was committed and pushed. The owner-approved 0.7.1 update refines airport labels and mobile date sizing, warns about same-day duplicate visits, and offers Save visit only for earlier history without changing stamp collection. Database and backup v3 preserve this choice; v1/v2 imports remain supported. See [docs/PASSPORT-COLLECTION.md](docs/PASSPORT-COLLECTION.md). Earlier planning/milestone notices below are historical.
 
 **Historical Passport planning record (2026-09-20):** Core 0.6.5 and its consuming package have been committed and pushed with the owner-tested map-fit fixes. The next approved product direction is expandable regional passport cards plus My stamps, first-visit collection, and persistent same-day drag ordering. This is planned, not implemented; see Sections 23-25, Phase P1, and [the Passport collection specification](docs/PASSPORT-COLLECTION.md). Earlier milestone statuses below remain historical. No new implementation or deployment is authorized by this documentation update.
 
@@ -1158,7 +1158,7 @@ without inventing a time.
 
 The application must support entering a visit that occurred in the past.
 
-Manual check-in defaults to the current calendar date with unknown time; future GPS check-in may capture date/time. Allow date correction without inventing a manual timestamp. If a new visit or edit predates an airport's collection date, explain the stamp move and require Save and move stamp / Cancel before persistence; cancellation preserves the draft. See Section 25.
+Manual check-in defaults to the current calendar date with unknown time; future GPS check-in may capture date/time. Allow date correction without inventing a manual timestamp. If a new visit predates an airport's collection date, explain both dates and offer Save and move stamp / Save visit only / Cancel before persistence; cancellation preserves the draft. Corrections to the stamp-establishing record require a separate move confirmation. See Section 25.
 
 This is necessary for users who have already participated in a physical passport program before installing the application.
 
@@ -1172,7 +1172,7 @@ A user must not be prevented from recording them merely because GPS verification
 
 The architecture should permit more than one check-in at the same airport.
 
-For the approved Passport phase, the first chronological visit means the airport stamp is collected; no separate physical-stamp flag is required. Each airport contributes once toward current completion under the program rules. Later visits remain history and do not add stamps or reorder collection. An earlier visit moves collection only after the Section 25 confirmation.
+For the approved Passport phase, the first chronological stamp-eligible visit means the airport stamp is collected; no separate physical-stamp flag is required. Each airport contributes once toward current completion under the program rules. Later visits remain history and do not add stamps or reorder collection. An earlier visit offers Save and move stamp, Save visit only (preserves the current stamp date/order), and Cancel, as specified in Section 25. Visit-only history is explicitly excluded from stamp-date derivation.
 
 Visit history may nevertheless retain all visits.
 
@@ -1197,11 +1197,11 @@ Keep the existing regional progress cards as the default My passport view and ov
 
 Manual dates do not establish same-day travel sequence. New stamps default to last in their date group with brief explanatory feedback. Legacy same-day entries have unconfirmed order; alphabetical display must not imply known travel history. Reorder reveals drag handles for one date, a visible insertion indicator, and Save order / Cancel. Dragging is restricted to that date; crossing dates requires a confirmed visit-date edit. Use handle-only touch dragging so ordinary scrolling remains available, with keyboard pick-up/move/drop and accessible announcements instead of visible up/down buttons.
 
-Persist saved ordering separately from visit dates and future GPS timestamps; never rewrite timestamps for display order. A new earlier visit/date edit requires explicit confirmation, then atomically updates visit and collection membership, initially appending the moved stamp within the earlier day. Preserve all other visits. Repeat visits do not duplicate stamps. Unknown times must remain unknown.
+Persist saved ordering separately from visit dates and future GPS timestamps; never rewrite timestamps for display order. A new earlier visit requires an explicit choice: move the stamp date and append within that earlier day, or save visit-only history without moving the existing stamp. Correcting a stamp-establishing visit requires move confirmation. Saving another visit on an occupied airport/date warns before preserving both records. Preserve all other visits. Repeat visits do not duplicate stamps. Unknown times must remain unknown.
 
 ## 25.3 Implementation decisions and compatibility
 
-Core owns the reusable views, ordering, persistence, migrations, feedback, and tests; programs own regions, airports, branding, and completion rules. No basemap availability is required. The local candidate uses per-date airport IDs and a confirmed flag, additive database v2 migration, v2 backups, earliest-visit reconciliation, confirmed-local-order precedence on import, and revision-checked transactions. See the implemented decisions in the specification. Existing v1 backups remain importable and existing explicit orders must not be erased by a backup lacking order metadata. Full requirements and acceptance are in the linked specification.
+Core owns the reusable views, ordering, persistence, migrations, feedback, and tests; programs own regions, airports, branding, and completion rules. No basemap availability is required. The local candidate uses per-date airport IDs and a confirmed flag, database v3 migration preserving existing records, v3 backups, earliest eligible-visit reconciliation, confirmed-local-order precedence on import, and revision-checked transactions. See the implemented decisions in the specification. Existing v1/v2 backups remain importable and existing explicit orders must not be erased by a backup lacking order metadata. Full requirements and acceptance are in the linked specification.
 
 ---
 
@@ -1344,7 +1344,7 @@ Example:
 
 ```ts
 {
-    schemaVersion: 2
+    schemaVersion: 3
 }
 ```
 
@@ -1874,7 +1874,7 @@ Conceptual shape:
 ```json
 {
   "format": "aviation-passport",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "programId": "fly-washington",
   "exportedAt": "2026-09-06T18:00:00Z",
   "checkIns": [],
@@ -1883,7 +1883,7 @@ Conceptual shape:
 }
 ```
 
-The actual schema should be formally documented and tested. The example above describes the v2 export envelope used by the local Phase P1 candidate. Each nonempty collection has orders entries containing date, airportIds, and confirmed. The importer retains v1 support and rejects invalid cross-date/duplicate references before persistence; see Section 25.3.
+The actual schema should be formally documented and tested. The example above describes the v3 export envelope used by the local Phase P1 candidate. Each nonempty collection has orders entries containing date, airportIds, and confirmed. The importer retains v1/v2 support and rejects invalid cross-date/duplicate references before persistence; see Section 25.3.
 
 ---
 
@@ -2550,7 +2550,7 @@ Exit criteria: users can discover and complete offline setup without searching M
 3. Implement expandable regions, My stamps sorting/history, and same-date drag/keyboard ordering without duplicate overall progress. Reuse visit editing and feedback.
 4. Complete Section 58.3 tests, integrate a new core package in Fly Washington, and validate phone dragging/scrolling and accessibility before acceptance. GPS, named trips, photos, and cloud synchronization remain separate phases.
 
-The owner subsequently authorized implementation. Core and consuming-app code changes remain uncommitted for owner testing; physical acceptance and an instruction to commit remain outstanding.
+The owner subsequently authorized implementation. Core 0.7.0 and consuming-app changes were committed and pushed. The owner subsequently approved the 0.7.1 refinements and authorized commit/push.
 
 ## Phase 0 — Repository Foundation
 
@@ -3015,7 +3015,7 @@ The following rules should remain easy to find because violating one generally i
 
 # 78. Immediate Next Steps
 
-**Current next feature (2026-09-20):** Test the uncommitted Phase P1 candidate using docs/PASSPORT-COLLECTION.md. Schema/correction/conflict decisions are now recorded there. Resolve owner feedback before committing the implementation. Preserve independent core ownership and test from the consuming package. The older U1 follow-up below is retained as historical acceptance context, not an instruction to recreate or republish core 0.6.0.
+**Current next feature (2026-09-20):** Phase P1 and the owner-approved 0.7.1 refinements are documented in docs/PASSPORT-COLLECTION.md, including schema/correction/conflict decisions. The owner authorized commit/push after local testing. Preserve independent core ownership and test from the consuming package. The older U1 follow-up below is retained as historical acceptance context, not an instruction to recreate or republish core 0.6.0.
 
 Continue from the implemented MapLibre/PMTiles system and committed core 0.5.1 marker-gesture fix. The owner reports the application deployed and has confirmed desktop/mobile gestures locally; this is not complete installed-PWA offline acceptance. Phase U1 is implemented locally in core 0.6.0; the next work is physical installed-PWA acceptance and review of the uncommitted implementation, not another renderer or storage migration.
 

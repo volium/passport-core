@@ -53,7 +53,7 @@ test('keyboard same-day order persists, cancels safely, and round-trips through 
   const download = page.waitForEvent('download'); await page.locator('#export').click();
   const stream = await (await download).createReadStream(); const chunks: Buffer[] = []; for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
   const backup = JSON.parse(Buffer.concat(chunks).toString());
-  expect(backup.schemaVersion).toBe(2); expect(backup.orders[0].airportIds).toEqual(['BBB', 'CCC', 'AAA']);
+  expect(backup.schemaVersion).toBe(3); expect(backup.orders[0].airportIds).toEqual(['BBB', 'CCC', 'AAA']);
   const fresh = await context.browser()!.newContext(); await fresh.addInitScript(() => localStorage.setItem('passport:independent-core:offline-introduction:browser', 'seen'));
   const other = await fresh.newPage(); await other.goto('/tests/browser/app.html?collection=1'); await other.locator('#passport-tab').click();
   await other.locator('#import').setInputFiles({ name: 'restored.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
@@ -85,9 +85,20 @@ test('earlier visit asks before moving a stamp; cancellation keeps input and rep
   await expect(row.getByLabel('Notes')).toHaveValue('Earlier visit');
   await row.getByRole('button', { name: 'Save check-in' }).click(); await page.getByRole('button', { name: 'Save and move stamp' }).click();
   await expect(row.locator('summary')).toContainText('Stamp 2026-09-09'); await expect(row).toContainText('2 visits'); await expect(page.locator('#overall strong')).toHaveText('4 / 4');
-  page.on('dialog', d => void d.accept());
+  await expect(row.locator('.history article').filter({ hasText: 'Original AAA' })).toContainText('Repeat visit');
+  await expect(row.locator('.history article').filter({ hasText: 'Earlier visit' })).toContainText('Stamp collection date');
+  await expect(row.locator('.history article > strong')).toHaveText(['2026-09-09', '2026-09-10']);
+  await row.getByRole('button', { name: 'Show on map', exact: true }).click();
+  await expect(page.locator('#detail .history article').filter({ hasText: 'Original AAA' })).toContainText('Repeat visit');
+  await expect(page.locator('#detail .history article').filter({ hasText: 'Earlier visit' })).toContainText('Stamp collection date');
+  await expect(page.locator('#detail .history article > strong')).toHaveText(['2026-09-09', '2026-09-10']);
+  await page.reload(); await page.locator('#passport-tab').click(); await page.getByRole('button', { name: 'My stamps', exact: true }).click();
+  await row.locator('summary').click();
+  await expect(row.locator('.history article').filter({ hasText: 'Original AAA' })).toContainText('Repeat visit');
   await row.locator('.history article').filter({ hasText: 'Earlier visit' }).getByRole('button', { name: 'Delete' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete visit', exact: true }).click();
   await expect(row.locator('summary')).toContainText('Stamp 2026-09-10'); await expect(page.locator('.collection-status')).toContainText('Visit deleted');
+  await expect(row.locator('.history article').filter({ hasText: 'Original AAA' })).toContainText('Stamp collection date');
 });
 
 test('stale ordering draft cannot overwrite another tab and cancelled drafts reveal latest visits', async ({ page, context }) => {
@@ -167,4 +178,92 @@ test('Explore confirmation Escape preserves its draft and editing history cannot
   await expect(page.locator('#checkin [name="notes"]')).toHaveValue('Unfinished earlier visit');
   await page.locator('#cancel-visit-draft').click(); await page.locator('#detail [data-edit]').first().click();
   await expect(page.locator('#checkin [name="notes"]')).toHaveValue('Original AAA');
+});
+
+test('same-day repeat warns, cancellation keeps the draft, and editing notes does not warn again', async ({ page }) => {
+  await seed(page); await page.getByRole('button', { name: 'My stamps', exact: true }).click();
+  const row = page.locator('[data-stamp="AAA"]'); await row.locator('summary').click();
+  await row.getByRole('button', { name: 'Add another visit' }).click();
+  await row.getByLabel('Visit date').fill('2026-09-10'); await row.getByLabel('Notes').fill('A second landing');
+  await row.getByRole('button', { name: 'Save check-in' }).click();
+  await expect(page.getByRole('dialog')).toContainText('Another visit on the same day?');
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+  await expect(row.getByLabel('Notes')).toHaveValue('A second landing');
+  await expect(row.locator('.history article')).toHaveCount(1);
+  await row.getByRole('button', { name: 'Save check-in' }).click();
+  await page.getByRole('button', { name: 'Save another visit', exact: true }).click();
+  await expect(row.locator('.history article')).toHaveCount(2);
+  await expect(page.locator('#overall strong')).toHaveText('4 / 4');
+  await row.locator('.history article').filter({ hasText: 'A second landing' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await row.getByLabel('Notes').fill('Notes corrected'); await row.getByRole('button', { name: 'Save changes' }).click();
+  await expect(row).toContainText('Notes corrected'); await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+
+test('saving earlier history keeps the stamp across reload and notes edits', async ({ page }) => {
+  await seed(page); await stamps(page);
+  await page.locator('[data-reorder="2026-09-10"]').click(); await page.locator('[data-save-order]').click();
+  const row = page.locator('[data-stamp="AAA"]'); await row.locator('summary').click();
+  await row.getByRole('button', { name: 'Add another visit' }).click();
+  await row.getByLabel('Visit date').fill('2026-09-09'); await row.getByLabel('Notes').fill('Before collecting my stamp');
+  await row.getByRole('button', { name: 'Save check-in' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('2026-09-10'); await expect(dialog).toContainText('2026-09-09');
+  await dialog.getByRole('button', { name: 'Save visit only', exact: true }).click();
+  await expect(row.locator('summary')).toContainText('Stamp 2026-09-10');
+  expect(await ids(page)).toEqual(['AAA', 'BBB', 'CCC']);
+  await expect(row).toContainText('Visit only - excluded from stamp collection');
+  await page.reload(); await page.locator('#passport-tab').click(); await stamps(page);
+  await row.locator('summary').click();
+  await row.locator('.history article').filter({ hasText: 'Before collecting my stamp' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await row.getByLabel('Notes').fill('Corrected history notes'); await row.getByRole('button', { name: 'Save changes' }).click();
+  await expect(row.locator('summary')).toContainText('Stamp 2026-09-10');
+  await expect(row).toContainText('Visit only - excluded from stamp collection');
+  const download = page.waitForEvent('download'); await page.locator('#export').click();
+  const stream = await (await download).createReadStream(); const chunks: Buffer[] = []; for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+  const backup = JSON.parse(Buffer.concat(chunks).toString());
+  expect(backup.schemaVersion).toBe(3);
+  expect(backup.checkIns.find((v: { notes: string }) => v.notes === 'Corrected history notes').historyOnly).toBe(true);
+  expect(backup.orders[0]).toEqual({ date: '2026-09-10', airportIds: ['AAA', 'BBB', 'CCC'], confirmed: true });
+  await row.locator('.history article').filter({ hasText: 'Original AAA' }).getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('remaining visits were explicitly excluded');
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete visit', exact: true }).click();
+  await expect(row.locator('summary')).toContainText('No stamp recorded');
+  await expect(page.locator('#app')).toContainText('Visit history only');
+});
+
+
+for (const surface of ['Passport', 'Explore']) test('deleting a stamp visit updates collection groups and persisted order from ' + surface, async ({ page }) => {
+  await seed(page); await stamps(page);
+  await page.locator('[data-reorder="2026-09-10"]').click(); await page.locator('[data-save-order]').click();
+  const row = page.locator('[data-stamp="AAA"]'); await row.locator('summary').click();
+  await row.getByRole('button', { name: 'Add another visit' }).click();
+  await row.getByLabel('Visit date').fill('2026-09-12'); await row.getByLabel('Notes').fill('Later return');
+  await row.getByRole('button', { name: 'Save check-in' }).click();
+  await expect(row).toContainText('2 visits');
+  if (surface === 'Explore') await row.getByRole('button', { name: 'Show on map', exact: true }).click();
+  const history = surface === 'Explore' ? page.locator('#detail .history') : row.locator('.history');
+  const remove = history.locator('article').filter({ hasText: 'Original AAA' }).getByRole('button', { name: 'Delete', exact: true });
+  await remove.click();
+  await expect(page.getByRole('dialog')).toContainText('will move from 2026-09-10 to 2026-09-12');
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(history.locator('article')).toHaveCount(2);
+  await remove.click(); await page.keyboard.press('Escape');
+  await expect(history.locator('article')).toHaveCount(2);
+  await remove.click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete visit', exact: true }).click();
+  if (surface === 'Explore') await page.locator('#passport-tab').click();
+  await expect(row.locator('summary')).toContainText('Stamp 2026-09-12');
+  expect(await ids(page)).toEqual(['BBB', 'CCC']);
+  expect(await ids(page, '2026-09-12')).toEqual(['AAA']);
+  await page.reload(); await page.locator('#passport-tab').click(); await stamps(page);
+  expect(await ids(page)).toEqual(['BBB', 'CCC']);
+  expect(await ids(page, '2026-09-12')).toEqual(['AAA']);
+  await row.locator('summary').click();
+  await row.locator('.history article').getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete visit', exact: true }).click();
+  await expect(page.locator('[data-date="2026-09-12"]')).toHaveCount(0);
+  await page.reload(); await page.locator('#passport-tab').click(); await stamps(page);
+  await expect(row).toHaveCount(0);
+  expect(await ids(page)).toEqual(['BBB', 'CCC']);
 });

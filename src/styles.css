@@ -212,3 +212,8 @@ progress::-moz-progress-bar { background: var(--region, #438262); }
 .collection-confirm::backdrop { background: #0007; }
 .collection-confirm h2 { margin-bottom: 14px; }
 .collection-confirm p { white-space: pre-line; }
+
+/* Constrain native date controls inside narrow Passport and Explore editors. */
+.passport-app input[type='date'] { display: block; width: 100%; min-width: 0; max-width: 100%; -webkit-appearance: none; appearance: none; }
+.passport-app input[type='date']::-webkit-date-and-time-value { min-width: 0; text-align: left; }
+.collection-airport, .collection-airport form, .collection-airport form label { min-width: 0; max-width: 100%; }

@@ -50,3 +50,9 @@ The temporary unpublished 0.6.4 diagnostics, query flags, in-app log panel, and 
 ## Passport collection feedback (0.7.0 candidate)
 
 Phase P1 is implemented locally for owner testing. Earlier collection-date corrections require an explicit Save and move stamp / Cancel confirmation before persistence, with the draft preserved on Cancel. Reorder mode uses Save order / Cancel; successful order saving and default last-in-day placement use brief local confirmations under the existing five-second policy. Errors remain actionable with the ordering draft intact. Announce drag/keyboard positions and invalid cross-date moves accessibly without claiming a save before the transaction succeeds. Keep feedback visible if deleting the last visit removes its airport row. See [the collection specification](PASSPORT-COLLECTION.md).
+
+### Earlier and same-day visits
+
+Earlier-visit confirmation names the airport and shows the current and earlier dates. Offer Save and move stamp, Save visit only, and Cancel; explain the effect on collection order before saving. Visit-only records retain their actual date and show a history label. Cancellation preserves the draft. Correcting the only stamp-establishing record explains how to add separate history instead. Warn on another visit to the same airport/date with Save another visit / Cancel; notes-only edits do not warn again. These are intentional decision dialogs, not timed notifications.
+
+Deletion uses the shared app confirmation dialog, with Delete visit / Cancel and Escape cancellation. Explain the resulting stamp date, collection-order change, or absence of a stamp before saving. Repeat visit labels identify eligible history; Visit only - excluded from stamp collection identifies records explicitly excluded by the user.

@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { openDB } from 'idb';
 import { describe, expect, it } from 'vitest';
 import { PassportStore } from '../src/persistence.js';
-import { collectionDates, collectionChanges, reconcileOrders, validateOrders } from '../src/collection.js';
+import { collectionDates, collectionChanges, reconcileOrders, validateOrders, visitStampLabel } from '../src/collection.js';
 import { validateBackup } from '../src/domain.js';
 import type { CheckIn, PassportProgram } from '../src/models.js';
 
@@ -92,4 +92,47 @@ it('reports a blocked v1 upgrade without deleting visits', async () => {
   const reopened = new PassportStore(id);
   expect(await reopened.list()).toEqual([visit(id, 'A')]);
   await reopened.close();
+});
+
+
+it('preserves visit-only history and confirmed stamp order through reload and v3 restore', async () => {
+  const id = program(), store = new PassportStore(id);
+  const a = visit(id, 'A'), b = visit(id, 'B'), early: CheckIn = { ...visit(id, 'A', '2026-09-08', 'history'), historyOnly: true };
+  await store.save(a); await store.save(b);
+  const orders = [{ date: '2026-09-10', airportIds: ['B', 'A'], confirmed: true }];
+  await store.saveOrder(orders[0], (await store.snapshot()).revision);
+  await store.save(early); await store.close();
+  const reopened = new PassportStore(id), state = await reopened.snapshot();
+  expect(collectionDates(state.visits).get('A')).toBe('2026-09-10'); expect(state.orders).toEqual(orders);
+  const backup = { format: 'aviation-passport', schemaVersion: 3, programId: id, exportedAt: '2026-09-15T00:00:00Z', checkIns: state.visits, attachments: [], orders };
+  const parsed = validateBackup(backup, { id, airports: [] } as unknown as PassportProgram);
+  const restored = new PassportStore(id + '-restore');
+  await restored.merge(parsed.checkIns.map(v => ({ ...v, programId: id + '-restore' })), parsed.orders);
+  expect(collectionDates(await restored.list()).get('A')).toBe('2026-09-10'); expect((await restored.snapshot()).orders).toEqual(orders);
+  for (const value of [false, 'true']) expect(() => validateBackup({ ...backup, checkIns: [a, b, { ...early, historyOnly: value }] }, { id } as PassportProgram)).toThrow();
+  expect(() => validateBackup({ ...backup, schemaVersion: 2 }, { id } as PassportProgram)).toThrow();
+  await reopened.delete(a.id);
+  expect(collectionDates(await reopened.list()).has('A')).toBe(false);
+  expect(await reopened.list()).toContainEqual(early);
+  expect((await reopened.snapshot()).orders).toEqual([{ ...orders[0], airportIds: ['B'] }]);
+  await reopened.close(); await restored.close();
+});
+
+it('upgrades v2 without changing existing visits, saved order or revision', async () => {
+  const id = program(), original = visit(id, 'A'), order = { date: '2026-09-10', airportIds: ['A'], confirmed: true };
+  const old = await openDB('aviation-passport:' + id, 2, { upgrade(db) { db.createObjectStore('checkIns', { keyPath: 'id' }); db.createObjectStore('orders', { keyPath: 'date' }); db.createObjectStore('meta'); } });
+  await old.put('checkIns', original); await old.put('orders', order); await old.put('meta', 7, 'revision'); old.close();
+  const store = new PassportStore(id);
+  expect(await store.snapshot()).toEqual({ visits: [original], orders: [order], revision: 7 }); await store.close();
+});
+
+
+it('history labels follow the current stamp date without rewriting visit eligibility', () => {
+  const original = visit('test', 'A'), earlier = visit('test', 'A', '2026-09-08', 'early');
+  expect(visitStampLabel(original, '2026-09-10')).toBe('Stamp collection date');
+  expect(visitStampLabel(original, '2026-09-08')).toBe('Repeat visit');
+  expect(visitStampLabel(earlier, '2026-09-08')).toBe('Stamp collection date');
+  expect(visitStampLabel({ ...original, historyOnly: true }, '2026-09-10')).toBe('Visit only - excluded from stamp collection');
+  expect(visitStampLabel(original, undefined)).toBe('Repeat visit');
+  expect(original.historyOnly).toBeUndefined();
 });

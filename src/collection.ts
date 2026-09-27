@@ -3,8 +3,13 @@ import type { CheckIn, StampOrder } from './models.js';
 /** Collection is derived from visits; ordering never changes a visit timestamp. */
 export function collectionDates(visits: CheckIn[]): Map<string, string> {
   const dates = new Map<string, string>();
-  for (const v of visits) if (!dates.has(v.airportId) || v.visitedAt < dates.get(v.airportId)!) dates.set(v.airportId, v.visitedAt);
+  for (const v of visits) if (!v.historyOnly && (!dates.has(v.airportId) || v.visitedAt < dates.get(v.airportId)!)) dates.set(v.airportId, v.visitedAt);
   return dates;
+}
+
+/** Same-day visits have no known time: label the date without inventing which visit came first. */
+export function visitStampLabel(visit: CheckIn, stampDate: string | undefined): string {
+  return visit.historyOnly ? 'Visit only - excluded from stamp collection' : visit.visitedAt === stampDate ? 'Stamp collection date' : 'Repeat visit';
 }
 
 export function reconcileOrders(before: CheckIn[], after: CheckIn[], orders: StampOrder[]): StampOrder[] {
@@ -21,7 +26,7 @@ export function reconcileOrders(before: CheckIn[], after: CheckIn[], orders: Sta
 export function collectionChanges(before: CheckIn[], after: CheckIn[]): string[] {
   const oldDates = collectionDates(before), dates = collectionDates(after);
   return [...oldDates].filter(([id, date]) => dates.get(id) !== date).map(([id, date]) =>
-    dates.has(id) ? `${id}: stamp moves from ${date} to ${dates.get(id)}.` : `${id}: the last visit and collected stamp will be removed.`);
+    dates.has(id) ? `${id}: stamp moves from ${date} to ${dates.get(id)}.` : after.some(v => v.airportId === id) ? `${id}: the stamp collection date will be removed. Visit-only records remain in history.` : `${id}: the last visit and collected stamp will be removed.`);
 }
 
 export function validateOrders(value: unknown, visits: CheckIn[]): value is StampOrder[] {

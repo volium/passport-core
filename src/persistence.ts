@@ -13,8 +13,9 @@ export class PassportStore {
   constructor(private programId: string) {
     this.database = new Promise((resolve, reject) => {
       let blocked = false;
-      void openDB<PassportDatabase>(`aviation-passport:${programId}`, 2, {
+      void openDB<PassportDatabase>(`aviation-passport:${programId}`, 3, {
         upgrade(db, oldVersion) {
+          // v3 adds visit-only semantics; the version boundary protects against older writers.
           if (oldVersion < 1) db.createObjectStore('checkIns', { keyPath: 'id' });
           if (oldVersion < 2) { db.createObjectStore('orders', { keyPath: 'date' }); db.createObjectStore('meta'); }
         },

@@ -1,6 +1,6 @@
 import { PassportCollection } from './passport-collection.js';
-import { collectionChanges, reconcileOrders } from './collection.js';
-import { confirmCollection } from './visit-ui.js';
+import { collectionDates, collectionChanges, reconcileOrders, visitStampLabel } from './collection.js';
+import { confirmCollection, chooseEarlierVisit } from './visit-ui.js';
 import type { PassportSnapshot } from './persistence.js';
 import { OfflineAccess, offlineCard, offlineNavigation, type InstallationGuidance } from './offline-access.js';
 import { PassportMap } from './map/renderer.js';
@@ -378,7 +378,8 @@ export class PassportApp {
     detail.hidden = false;
     this.syncPanels();
     this.el('.browse').hidden = true;
-    const visits = this.visits.filter(v => v.airportId === airport.id);
+    const visits = this.visits.filter(v => v.airportId === airport.id).sort((a, b) => a.visitedAt.localeCompare(b.visitedAt));
+    const stampDate = collectionDates(visits).get(airport.id);
     const draft = edit ? undefined : this.exploreDrafts.get(airport.id);
     detail.innerHTML = `<button id="close-detail" type="button" class="back-button">← All airports</button><span class="eyebrow">${escape(region.name)} · ${escape(airportLabel(airport))}</span><h2>${escape(airport.name)}</h2><p>${escape(airport.description)}</p>
     ${airport.address ? `<p class="airport-address">${escape(airport.address)}</p>` : ''}
@@ -387,7 +388,7 @@ export class PassportApp {
     ${airport.sources?.length ? `<p class="airport-sources">Sources: ${airport.sources.map(s => `<a href="${escape(s.url)}" target="_blank" rel="noopener noreferrer">${escape(s.name)}</a> (${escape(s.retrievedAt)})`).join(' · ')}</p>` : ''}
     <h3>Stamp locations</h3>${airport.stampLocations?.length ? airport.stampLocations.map(s => `<article class="stamp"><strong>${escape(s.name)}</strong><p>${escape(s.description)}</p><small>Access: ${escape(s.access.replace('-', ' '))}</small></article>`).join('') : '<p>Stamp details have not been added.</p>'}
     <form id="checkin" data-edit-id="${escape(edit?.id ?? draft?.id ?? '')}" data-revision="${draft?.revision ?? this.snapshot.revision}"><h3>${edit || draft?.id ? 'Edit visit' : 'Add a visit'}</h3><label>Visit date<input name="date" type="date" required max="${localDate()}" value="${edit?.visitedAt ?? draft?.date ?? localDate()}"></label><label>Notes <span class="muted">(optional)</span><textarea name="notes" rows="3" maxlength="10000" placeholder="A good landing, a great lunch…">${escape(edit?.notes ?? draft?.notes ?? '')}</textarea></label><p class="muted">Saved locally as an unverified visit. Time is not recorded.</p><button class="primary" type="submit">${edit || draft?.id ? 'Save changes' : 'Save check-in'}</button><button type="button" id="cancel-visit-draft">Cancel draft</button><p id="save-status" role="status"></p></form>
-    <h3 id="history-heading" tabindex="-1">Visit history <span id="visit-count" class="muted">${visits.length}</span></h3><div class="history">${visits.length ? visits.map(v => `<article><strong>${escape(v.visitedAt)}</strong><small>Unverified</small><p>${escape(v.notes || 'No notes for this visit.')}</p><div><button type="button" data-edit="${escape(v.id)}">Edit</button><button type="button" data-delete="${escape(v.id)}">Delete</button></div></article>`).join('') : '<p class="muted">Your first visit is still ahead of you.</p>'}</div>`;
+    <h3 id="history-heading" tabindex="-1">Visit history <span id="visit-count" class="muted">${visits.length}</span></h3><div class="history">${visits.length ? visits.map(v => `<article><strong>${escape(v.visitedAt)}</strong><small>Unverified &middot; ${visitStampLabel(v, stampDate)}</small><p>${escape(v.notes || 'No notes for this visit.')}</p><div><button type="button" data-edit="${escape(v.id)}">Edit</button><button type="button" data-delete="${escape(v.id)}">Delete</button></div></article>`).join('') : '<p class="muted">Your first visit is still ahead of you.</p>'}</div>`;
     this.el('#cancel-visit-draft').addEventListener('click', () => { this.exploreDrafts.delete(airport.id); this.renderDetail(); });
     this.el('#checkin').addEventListener('input', () => this.rememberExploreDraft());
     this.el('#close-detail').addEventListener('click', () => this.closeDetail());
@@ -518,7 +519,7 @@ export class PassportApp {
     button.disabled = true;
     try {
       const state = await this.store.snapshot();
-      const backup: PassportBackup = { format: 'aviation-passport', schemaVersion: 2, programId: this.program.id, exportedAt: new Date().toISOString(), checkIns: state.visits, orders: reconcileOrders(state.visits, state.visits, state.orders), attachments: [] };
+      const backup: PassportBackup = { format: 'aviation-passport', schemaVersion: 3, programId: this.program.id, exportedAt: new Date().toISOString(), checkIns: state.visits, orders: reconcileOrders(state.visits, state.visits, state.orders), attachments: [] };
       if (this.events.signal.aborted) return;
       const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
       const link = document.createElement('a'); link.href = url; link.download = `${this.program.id}-passport.json`;
@@ -587,15 +588,51 @@ export class PassportApp {
 
   private async saveRecord(visit: CheckIn, revision: number): Promise<boolean> {
     if (!isCalendarDate(visit.visitedAt) || visit.visitedAt > localDate()) throw new Error('Choose a valid date today or earlier.');
+    const original = this.visits.find(v => v.id === visit.id);
+    if (original?.historyOnly) visit.historyOnly = true;
+    const sameDay = this.visits.filter(v => v.id !== visit.id && v.airportId === visit.airportId && v.visitedAt === visit.visitedAt);
+    if (sameDay.length && original?.visitedAt !== visit.visitedAt) {
+      const airport = this.program.airports.find(a => a.id === visit.airportId);
+      const message = `You already have ${sameDay.length} visit${sameDay.length === 1 ? '' : 's'} recorded for ${airport?.name ?? visit.airportId} on ${visit.visitedAt}. Save another only if this was a separate visit. Your existing visits will be kept.`;
+      if (!await confirmCollection(this.root, message, 'Save another visit', 'Another visit on the same day?')) return false;
+    }
+    const currentDate = collectionDates(this.visits).get(visit.airportId);
     const next = [...this.visits.filter(v => v.id !== visit.id), visit];
-    const changes = collectionChanges(this.visits, next);
-    if (changes.length && !await confirmCollection(this.root, changes.join('\n') + '\nYour other visits will be kept.')) return false;
+    const nextDate = collectionDates(next).get(visit.airportId);
+    if (currentDate && nextDate && nextDate < currentDate) {
+      const airport = this.program.airports.find(a => a.id === visit.airportId);
+      // Keeping a date requires an unchanged stamp-eligible visit on that date.
+      // Editing the stamp-collecting visit itself is a correction, not adding prior history.
+      const canKeep = this.visits.some(v => v.id !== visit.id && v.airportId === visit.airportId && !v.historyOnly && v.visitedAt === currentDate);
+      if (canKeep) {
+        const choice = await chooseEarlierVisit(this.root, airport?.name ?? visit.airportId, currentDate, nextDate);
+        if (choice === 'cancel') return false;
+        if (choice === 'visit-only') visit.historyOnly = true;
+      } else if (!await confirmCollection(this.root, `Correcting this visit will move the stamp collection date for ${airport?.name ?? visit.airportId} earlier, from ${currentDate} to ${nextDate}. To record a separate earlier visit without moving the stamp, cancel and choose Add another visit.`)) return false;
+    } else {
+      const changes = collectionChanges(this.visits, next);
+      if (changes.length && !await confirmCollection(this.root, changes.join('\n') + '\nYour other visits will be kept.')) return false;
+    }
     try { await this.store.save(visit, revision); } catch (error) { await this.reloadPassport(); throw error; } await this.reloadPassport(); this.render(); return true;
   }
 
   private async deleteRecord(id: string, revision: number): Promise<boolean> {
-    const changes = collectionChanges(this.visits, this.visits.filter(v => v.id !== id));
-    if (!window.confirm(['Delete this visit from this device? This cannot be undone.', ...changes].join('\n'))) return false;
+    const visit = this.visits.find(v => v.id === id);
+    if (!visit) throw new Error('This visit is no longer available. Reload your passport to review the latest visits.');
+    const airport = this.program.airports.find(a => a.id === visit.airportId);
+    const remaining = this.visits.filter(v => v.id !== id);
+    const oldDate = collectionDates(this.visits).get(visit.airportId);
+    const nextDate = collectionDates(remaining).get(visit.airportId);
+    const hasVisits = remaining.some(v => v.airportId === visit.airportId);
+    const effect = nextDate
+      ? oldDate === nextDate
+        ? 'The stamp collection date will stay ' + nextDate + '. Another eligible visit remains on that date.'
+        : 'The stamp collection date will move from ' + oldDate + ' to ' + nextDate + ', the earliest remaining eligible visit. Collection order will update to that date.'
+      : hasVisits
+        ? 'No stamp collection date will remain. The remaining visits were explicitly excluded from stamp collection. They will stay in your history, and this airport will still count as visited.'
+        : 'No visits will remain for this airport. It will no longer count as visited, and it will have no collected stamp.';
+    const message = 'Delete the visit to ' + (airport?.name ?? visit.airportId) + ' on ' + visit.visitedAt + '? ' + effect + ' This cannot be undone.';
+    if (!await confirmCollection(this.root, message, 'Delete visit', 'Delete this visit?')) return false;
     await this.store.delete(id, revision); await this.reloadPassport(); this.render(); return true;
   }
 

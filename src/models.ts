@@ -29,12 +29,14 @@ export interface CheckIn {
   id: string; programId: string; airportId: string;
   /** ISO calendar date, with no invented visit time. */
   visitedAt: string; timeKnown: false;
+  /** An explicitly saved historical visit that does not establish a stamp date. */
+  historyOnly?: true;
   createdAt: string; updatedAt: string; notes: string;
   verification: { status: 'unverified' };
 }
 export interface AirportFilters { query: string; regionId: string; visited: 'all' | 'visited' | 'unvisited' }
 export interface StampOrder { date: string; airportIds: string[]; confirmed: boolean }
 export interface PassportBackup {
-  format: 'aviation-passport'; schemaVersion: 1 | 2; orders?: StampOrder[]; programId: string;
+  format: 'aviation-passport'; schemaVersion: 1 | 2 | 3; orders?: StampOrder[]; programId: string;
   exportedAt: string; checkIns: CheckIn[]; attachments: never[];
 }

@@ -67,12 +67,13 @@ export function validateBackup(value: unknown, program: PassportProgram): Passpo
   const fail = (): never => { throw new Error('This is not a compatible passport backup. Check its program, version, and visit data.'); };
   if (!value || typeof value !== 'object') return fail();
   const backup = value as Partial<PassportBackup>;
-  if (backup.format !== 'aviation-passport' || (backup.schemaVersion !== 1 && backup.schemaVersion !== 2) || backup.programId !== program.id || !Array.isArray(backup.checkIns) || backup.checkIns.length > 10000 || !Array.isArray(backup.attachments) || backup.attachments.length || typeof backup.exportedAt !== 'string' || !Number.isFinite(Date.parse(backup.exportedAt))) return fail();
+  if (backup.format !== 'aviation-passport' || (backup.schemaVersion !== 1 && backup.schemaVersion !== 2 && backup.schemaVersion !== 3) || backup.programId !== program.id || !Array.isArray(backup.checkIns) || backup.checkIns.length > 10000 || !Array.isArray(backup.attachments) || backup.attachments.length || typeof backup.exportedAt !== 'string' || !Number.isFinite(Date.parse(backup.exportedAt))) return fail();
   const ids = new Set<string>();
   for (const visit of backup.checkIns) {
     if (!visit || typeof visit.id !== 'string' || !visit.id.trim() || ids.has(visit.id) || visit.programId !== program.id || (typeof visit.airportId !== 'string' || !visit.airportId.trim() || visit.airportId.length > 200 || (backup.schemaVersion === 1 && !program.airports.some(a => a.id === visit.airportId))) || typeof visit.visitedAt !== 'string' || !isCalendarDate(visit.visitedAt) || visit.timeKnown !== false || typeof visit.notes !== 'string' || visit.notes.length > 10000 || typeof visit.createdAt !== 'string' || !Number.isFinite(Date.parse(visit.createdAt)) || typeof visit.updatedAt !== 'string' || !Number.isFinite(Date.parse(visit.updatedAt)) || visit.verification?.status !== 'unverified') return fail();
+    if (visit.historyOnly !== undefined && (backup.schemaVersion !== 3 || visit.historyOnly !== true)) return fail();
     ids.add(visit.id);
   }
-  if (backup.schemaVersion === 2 && !validateOrders(backup.orders, backup.checkIns)) return fail();
+  if (backup.schemaVersion !== 1 && !validateOrders(backup.orders, backup.checkIns)) return fail();
   return backup as PassportBackup;
 }

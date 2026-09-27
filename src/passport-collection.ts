@@ -1,5 +1,5 @@
 import { calculateProgress, isCalendarDate } from './domain.js';
-import { collectionDates } from './collection.js';
+import { collectionDates, visitStampLabel } from './collection.js';
 import type { PassportProgram, StampOrder } from './models.js';
 import type { PassportSnapshot } from './persistence.js';
 import { html, today } from './visit-ui.js';
@@ -76,12 +76,17 @@ export class PassportCollection {
   }
   private row(id: string, handle = false): string {
     const airport = this.program.airports.find(a => a.id === id);
-    const visits = this.state.visits.filter(v => v.airportId === id);
+    const visits = this.state.visits.filter(v => v.airportId === id).sort((a, b) => a.visitedAt.localeCompare(b.visitedAt));
     const date = collectionDates(visits).get(id);
     const key = `airport:${id}`;
     const region = this.program.regions.find(r => r.id === airport?.regionId);
     const draft = this.drafts.get(id);
-    return `<li class="collection-row" data-stamp="${html(id)}">${handle ? `<button class="stamp-handle" type="button" data-handle="${html(id)}" aria-label="Reorder ${html(this.name(id))}" aria-describedby="reorder-help" aria-pressed="false">&#8942;&#8942;</button>` : ''}<details data-key="${html(key)}" ${this.opened.has(key) && !handle ? 'open' : ''}><summary ${handle ? 'inert' : ''}><strong>${html(airport?.identifiers?.faa || id)} &middot; ${html(this.name(id))}</strong><span>${date ? `&#10003; Visited &middot; Stamp ${date}` : '&#9675; Not visited'}</span><small>${html(region?.name ?? 'Airport no longer in program data')}${airport && !airport.participation.participating ? ' &middot; No longer participating' : ''}${visits.length > 1 ? ` &middot; ${visits.length} visits` : ''}</small></summary>${this.opened.has(key) && !handle ? `<div class="collection-airport"><div class="collection-actions"><button type="button" data-add="${html(id)}">${visits.length ? 'Add another visit' : 'Add a visit'}</button>${airport?.participation.participating ? `<button type="button" data-map="${html(id)}">Show on map</button>` : ''}</div>${draft ? this.editor(id, draft) : ''}<div class="history">${visits.map(v => `<article><strong>${html(v.visitedAt)}</strong><small>Unverified &middot; Time not recorded</small><p>${html(v.notes || 'No notes for this visit.')}</p><div><button type="button" data-edit-visit="${html(v.id)}">Edit</button><button type="button" data-delete-visit="${html(v.id)}">Delete</button></div></article>`).join('') || '<p class="muted">Your first visit is still ahead of you.</p>'}</div></div>` : ''}</details></li>`;
+    const metadata = [
+      this.view !== 'regions' ? region?.name ?? 'Airport no longer in program data' : '',
+      airport && !airport.participation.participating ? 'No longer participating' : '',
+      visits.length > 1 ? `${visits.length} visits` : '',
+    ].filter(Boolean);
+    return `<li class="collection-row" data-stamp="${html(id)}">${handle ? `<button class="stamp-handle" type="button" data-handle="${html(id)}" aria-label="Reorder ${html(this.name(id))}" aria-describedby="reorder-help" aria-pressed="false">&#8942;&#8942;</button>` : ''}<details data-key="${html(key)}" ${this.opened.has(key) && !handle ? 'open' : ''}><summary ${handle ? 'inert' : ''}><strong>${html(this.name(id))} &middot; ${html(airport?.identifiers?.faa || id)}</strong><span>${date ? `&#10003; Visited &middot; Stamp ${date}` : visits.length ? '&#10003; Visited &middot; No stamp recorded' : '&#9675; Not visited'}</span>${metadata.length ? `<small>${metadata.map(html).join(' &middot; ')}</small>` : ''}</summary>${this.opened.has(key) && !handle ? `<div class="collection-airport"><div class="collection-actions"><button type="button" data-add="${html(id)}">${visits.length ? 'Add another visit' : 'Add a visit'}</button>${airport?.participation.participating ? `<button type="button" data-map="${html(id)}">Show on map</button>` : ''}</div>${draft ? this.editor(id, draft) : ''}<div class="history">${visits.map(v => `<article><strong>${html(v.visitedAt)}</strong><small>Unverified &middot; Time not recorded &middot; ${visitStampLabel(v, date)}</small><p>${html(v.notes || 'No notes for this visit.')}</p><div><button type="button" data-edit-visit="${html(v.id)}">Edit</button><button type="button" data-delete-visit="${html(v.id)}">Delete</button></div></article>`).join('') || '<p class="muted">Your first visit is still ahead of you.</p>'}</div></div>` : ''}</details></li>`;
   }
   private editor(id: string, d: Draft) {
     return `<form data-editor="${html(id)}"><h3>${d.id ? 'Edit visit' : 'Add a visit'}</h3><label>Visit date<input name="date" type="date" required max="${today()}" value="${html(d.date)}"></label><label>Notes (optional)<textarea name="notes" maxlength="10000" rows="3">${html(d.notes)}</textarea></label><p class="muted">Saved locally as an unverified visit. Time is not recorded.</p><div class="collection-actions"><button type="submit">${d.id ? 'Save changes' : 'Save check-in'}</button><button type="button" data-cancel-edit="${html(id)}">Cancel</button></div></form>`;
@@ -97,19 +102,24 @@ export class PassportCollection {
     this.root.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === this.view)));
     (this.root.querySelector('.collection-sort') as HTMLElement).hidden = this.view !== 'stamps';
     const dates = collectionDates(this.state.visits);
+    const visitedIds = [...new Set(this.state.visits.map(v => v.airportId))];
     if (this.view === 'regions') {
       body.innerHTML = `<div id="regions" class="region-cards">${calculateProgress(this.program, this.state.visits).regions.map(r => {
         const key = `region:${r.id}`;
         return `<details class="region-card" data-key="${html(key)}" style="--region:${r.color}" ${this.opened.has(key) ? 'open' : ''}><summary><span class="region-heading"><span class="region-dot" aria-hidden="true"></span><strong>${html(r.name)}</strong><span>${r.complete ? '&#10003; Complete' : `${r.visited} / ${r.total}`}</span></span><progress aria-label="${html(r.name)} progress" value="${r.visited}" max="${r.total || 1}"></progress><small>${r.complete ? 'Every journey leaves a mark.' : `${r.required} airports to complete this region`}</small></summary><ul class="stamp-list">${this.alphabetical(this.program.airports.filter(a => a.regionId === r.id && a.participation.participating).map(a => a.id)).map(id => this.row(id)).join('') || '<li>No participating airports.</li>'}</ul></details>`;
       }).join('')}</div>`;
-    } else if (!dates.size) body.innerHTML = '<p class="empty">Your collected stamps will appear after your first visit.</p><button type="button" data-explore>Explore airports</button>';
-    else if (this.sort === 'name') body.innerHTML = `<ul class="stamp-list">${this.alphabetical([...dates.keys()]).map(id => this.row(id)).join('')}</ul>`;
+    } else if (!visitedIds.length) body.innerHTML = '<p class="empty">Your collected stamps will appear after your first visit.</p><button type="button" data-explore>Explore airports</button>';
+    else if (this.sort === 'name') body.innerHTML = `<ul class="stamp-list">${this.alphabetical(visitedIds).map(id => this.row(id)).join('')}</ul>`;
     else body.innerHTML = [...new Set(dates.values())].sort().map(date => {
       const order = this.state.orders.find(o => o.date === date);
       const ids = this.ordering?.date === date ? this.ordering.ids : order?.airportIds ?? this.alphabetical([...dates.keys()].filter(id => dates.get(id) === date));
       const editing = this.ordering?.date === date;
       return `<section class="stamp-day" data-date="${date}"><h3>${date}</h3><p class="muted">${order?.confirmed ? 'Collection order confirmed' : 'Same-day order unconfirmed'}</p>${ids.length > 1 ? editing ? '<p id="reorder-help" class="muted">Drag a handle within this date. Keyboard: Space to pick up, arrows to move, Space to drop, Escape to cancel a move.</p><div class="collection-actions"><button type="button" data-save-order>Save order</button><button type="button" data-cancel-order>Cancel</button></div>' : `<button type="button" data-reorder="${date}">Reorder</button>` : ''}<ul class="stamp-list">${ids.map(id => this.row(id, editing)).join('')}</ul></section>`;
     }).join('');
+    if (this.view === 'stamps' && this.sort === 'date') {
+      const history = this.alphabetical(visitedIds.filter(id => !dates.has(id)));
+      if (history.length) body.insertAdjacentHTML('beforeend', `<section class="stamp-day"><h3>Visit history only</h3><p class="muted">These visits do not record a collected stamp.</p><ul class="stamp-list">${history.map(id => this.row(id)).join('')}</ul></section>`);
+    }
     if (editorId && field) {
       const form = [...this.root.querySelectorAll<HTMLFormElement>('[data-editor]')].find(f => f.dataset.editor === editorId);
       const input = form?.elements.namedItem(field) as HTMLInputElement | HTMLTextAreaElement | null;
@@ -168,7 +178,7 @@ export class PassportCollection {
     try {
       if (await this.actions.save(id, draft)) {
         this.drafts.delete(id); this.draw(); this.focusRow(id);
-        this.notice(wasCollected ? 'Visit saved on this device.' : `Stamp added last for ${draft.date}. You can change its order.`, true);
+        this.notice(wasCollected || !collectionDates(this.state.visits).has(id) ? 'Visit saved on this device.' : `Stamp added last for ${draft.date}. You can change its order.`, true);
       }
     } catch (error) { this.notice(error instanceof Error ? error.message : 'Could not save. Your entries are kept; check device storage and try again.'); }
     finally { this.busy = false; submit.disabled = false; }
