@@ -1,16 +1,13 @@
-import { calculateProgress, isCalendarDate } from './domain.js';
-import { collectionDates, collectionSequence, visitStampLabel } from './collection.js';
+import { calculateProgress } from './domain.js';
+import { collectionDates, collectionSequence } from './collection.js';
 import type { PassportProgram, StampOrder } from './models.js';
 import type { PassportSnapshot } from './persistence.js';
-import { html, today } from './visit-ui.js';
+import { html } from './visit-ui.js';
 
-type Draft = { id?: string; date: string; notes: string; revision: number };
 type OrderDraft = { date: string; ids: string[]; revision: number };
 interface Actions {
-  save: (airportId: string, draft: Draft) => Promise<boolean>;
-  delete: (id: string, revision: number) => Promise<boolean>;
   order: (order: StampOrder, revision: number) => Promise<void>;
-  showMap: (id: string) => void;
+  showDetails: (id: string) => void;
   explore: () => void;
 }
 
@@ -21,7 +18,6 @@ export class PassportCollection {
   private sort = 'name';
   private sequence: ReturnType<typeof collectionSequence> = [];
   private opened = new Set<string>();
-  private drafts = new Map<string, Draft>();
   private ordering?: OrderDraft;
   private lifted?: { id: string; original: string[]; pointer?: number; valid: boolean };
   private timer?: ReturnType<typeof setTimeout>;
@@ -40,16 +36,7 @@ export class PassportCollection {
       const details = e.target;
       if (!(details instanceof HTMLDetailsElement) || !details.dataset.key) return;
       if (details.open) this.opened.add(details.dataset.key); else this.opened.delete(details.dataset.key);
-      if (details.open && details.dataset.key.startsWith('airport:') && !details.querySelector('.collection-airport')) { this.draw(); this.focusRow(details.dataset.key.slice(8)); }
     }, { ...opts, capture: true });
-    root.addEventListener('input', e => {
-      const form = (e.target as HTMLElement).closest<HTMLFormElement>('form[data-editor]');
-      if (!form) return;
-      const draft = this.drafts.get(form.dataset.editor!)!;
-      draft.date = (form.elements.namedItem('date') as HTMLInputElement).value;
-      draft.notes = (form.elements.namedItem('notes') as HTMLTextAreaElement).value;
-    }, opts);
-    root.addEventListener('submit', e => { e.preventDefault(); void this.submit(e.target as HTMLFormElement); }, opts);
     root.addEventListener('keydown', e => this.key(e), opts);
     root.addEventListener('pointerdown', e => this.pointerStart(e), opts);
     root.addEventListener('pointermove', e => this.pointerMove(e), opts);
@@ -59,11 +46,6 @@ export class PassportCollection {
   }
   update(state: PassportSnapshot) {
     if (state.revision === this.state.revision) return;
-    for (const [id, draft] of this.drafts) {
-      const before = JSON.stringify(this.state.visits.filter(v => v.airportId === id));
-      const after = JSON.stringify(state.visits.filter(v => v.airportId === id));
-      if (draft.revision === this.state.revision && before === after) draft.revision = state.revision;
-    }
     this.state = state;
     if (this.ordering) { this.notice('Passport data changed. Your order draft is kept; cancel it to review the latest collection before saving.'); return; }
     this.draw();
@@ -79,9 +61,7 @@ export class PassportCollection {
     const airport = this.program.airports.find(a => a.id === id);
     const visits = this.state.visits.filter(v => v.airportId === id).sort((a, b) => a.visitedAt.localeCompare(b.visitedAt));
     const date = collectionDates(visits).get(id);
-    const key = `airport:${id}`;
     const region = this.program.regions.find(r => r.id === airport?.regionId);
-    const draft = this.drafts.get(id);
     const position = this.view === 'stamps' ? this.sequence.find(stamp => stamp.airportId === id) : undefined;
     const metadata = [
       position?.provisional && this.sort !== 'date' ? 'Same-day order unconfirmed' : '',
@@ -89,19 +69,18 @@ export class PassportCollection {
       airport && !airport.participation.participating ? 'No longer participating' : '',
       visits.length > 1 ? `${visits.length} visits` : '',
     ].filter(Boolean);
-    return `<li class="collection-row" data-stamp="${html(id)}">${handle ? `<button class="stamp-handle" type="button" data-handle="${html(id)}" aria-label="Reorder ${html(this.name(id))}" aria-describedby="reorder-help" aria-pressed="false">&#8942;&#8942;</button>` : ''}<details data-key="${html(key)}" ${this.opened.has(key) && !handle ? 'open' : ''}><summary ${handle ? 'inert' : ''}><strong>${position ? `<span class="collection-number" aria-label="Collection number ${position.number}">#${position.number}</span> ` : ''}${html(this.name(id))} &middot; ${html(airport?.identifiers?.faa || id)}</strong><span>${date ? `&#10003; Visited &middot; Stamp ${date}` : visits.length ? '&#10003; Visited &middot; No stamp recorded' : '&#9675; Not visited'}</span>${metadata.length ? `<small>${metadata.map(html).join(' &middot; ')}</small>` : ''}</summary>${this.opened.has(key) && !handle ? `<div class="collection-airport"><div class="collection-actions"><button type="button" data-add="${html(id)}">${visits.length ? 'Add another visit' : 'Add a visit'}</button>${airport?.participation.participating ? `<button type="button" data-map="${html(id)}">Show on map</button>` : ''}</div>${draft ? this.editor(id, draft) : ''}<div class="history">${visits.map(v => `<article><strong>${html(v.visitedAt)}</strong><small>Unverified &middot; Time not recorded &middot; ${visitStampLabel(v, date)}</small><p>${html(v.notes || 'No notes for this visit.')}</p><div><button type="button" data-edit-visit="${html(v.id)}">Edit</button><button type="button" data-delete-visit="${html(v.id)}">Delete</button></div></article>`).join('') || '<p class="muted">Your first visit is still ahead of you.</p>'}</div></div>` : ''}</details></li>`;
+    const title = `${position ? '<span class="collection-number" aria-label="Collection number ' + position.number + '">#' + position.number + '</span> ' : ''}${html(this.name(id))}`;
+    return `<li class="collection-row" data-stamp="${html(id)}">${handle ? '<button class="stamp-handle" type="button" data-handle="' + html(id) + '" aria-label="Reorder ' + html(this.name(id)) + '" aria-describedby="reorder-help" aria-pressed="false">&#8942;&#8942;</button>' : ''}<div class="collection-summary"><strong>${handle ? title : '<button type="button" class="airport-details-link" data-details="' + html(id) + '">' + title + '</button>'} &middot; ${html(airport?.identifiers?.faa || id)}</strong><span>${date ? '&#10003; Visited &middot; Stamp ' + date : visits.length ? '&#10003; Visited &middot; No stamp recorded' : '&#9675; Not visited'}</span>${metadata.length ? '<small>' + metadata.map(html).join(' &middot; ') + '</small>' : ''}</div></li>`;
   }
-  private editor(id: string, d: Draft) {
-    return `<form data-editor="${html(id)}"><h3>${d.id ? 'Edit visit' : 'Add a visit'}</h3><label>Visit date<input name="date" type="date" required max="${today()}" value="${html(d.date)}"></label><label>Notes (optional)<textarea name="notes" maxlength="10000" rows="3">${html(d.notes)}</textarea></label><p class="muted">Saved locally as an unverified visit. Time is not recorded.</p><div class="collection-actions"><button type="submit">${d.id ? 'Save changes' : 'Save check-in'}</button><button type="button" data-cancel-edit="${html(id)}">Cancel</button></div></form>`;
+  restoreFocus(id: string, top: number) {
+    const target = [...this.root.querySelectorAll<HTMLElement>('[data-details]')].find(el => el.dataset.details === id);
+    (target ?? this.root.querySelector<HTMLElement>('[data-view][aria-pressed="true"]'))?.focus({ preventScroll: true });
+    this.root.closest('.passport-content')!.scrollTop = top;
   }
   private draw() {
     const body = this.root.querySelector<HTMLElement>('.collection-body')!;
     const scroll = this.root.closest('.passport-content')!;
     const top = scroll.scrollTop;
-    const active = document.activeElement as HTMLInputElement | HTMLTextAreaElement | null;
-    const editorId = active?.closest<HTMLFormElement>('[data-editor]')?.dataset.editor;
-    const field = editorId ? active?.name : undefined;
-    const selection = active instanceof HTMLTextAreaElement ? [active.selectionStart, active.selectionEnd] : undefined;
     this.root.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === this.view)));
     (this.root.querySelector('.collection-sort') as HTMLElement).hidden = this.view !== 'stamps';
     const dates = collectionDates(this.state.visits);
@@ -110,7 +89,7 @@ export class PassportCollection {
     if (this.view === 'regions') {
       body.innerHTML = `<div id="regions" class="region-cards">${calculateProgress(this.program, this.state.visits).regions.map(r => {
         const key = `region:${r.id}`;
-        return `<details class="region-card" data-key="${html(key)}" style="--region:${r.color}" ${this.opened.has(key) ? 'open' : ''}><summary><span class="region-heading"><span class="region-dot" aria-hidden="true"></span><strong>${html(r.name)}</strong><span>${r.complete ? '&#10003; Complete' : `${r.visited} / ${r.total}`}</span></span><progress aria-label="${html(r.name)} progress" value="${r.visited}" max="${r.total || 1}"></progress><small>${r.complete ? 'Every journey leaves a mark.' : `${r.required} airports to complete this region`}</small></summary><ul class="stamp-list">${this.alphabetical(this.program.airports.filter(a => a.regionId === r.id && a.participation.participating).map(a => a.id)).map(id => this.row(id)).join('') || '<li>No participating airports.</li>'}</ul></details>`;
+        return `<details class="region-card" data-key="${html(key)}" style="--region:${r.color}" ${this.opened.has(key) ? 'open' : ''}><summary><span class="region-heading"><svg class="region-chevron" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path class="region-chevron-outline" d="m6 3 5 5-5 5"/><path d="m6 3 5 5-5 5"/></svg><strong>${html(r.name)}</strong><span>${r.visited} / ${r.total}</span></span><progress aria-label="${html(r.name)} progress" value="${r.visited}" max="${r.total || 1}"></progress>${!r.complete && r.required !== r.total ? `<small>Visit ${r.required} ${r.required === 1 ? 'airport' : 'airports'} to complete this region.</small>` : ''}</summary><ul class="stamp-list">${this.alphabetical(this.program.airports.filter(a => a.regionId === r.id && a.participation.participating).map(a => a.id)).map(id => this.row(id)).join('') || '<li>No participating airports.</li>'}</ul></details>`;
       }).join('')}</div>`;
     } else if (!visitedIds.length) body.innerHTML = '<p class="empty">Your collected stamps will appear after your first visit.</p><button type="button" data-explore>Explore airports</button>';
     else if (this.sort === 'name') body.innerHTML = `<ul class="stamp-list">${this.alphabetical(visitedIds).map(id => this.row(id)).join('')}</ul>`;
@@ -125,12 +104,6 @@ export class PassportCollection {
       const history = this.alphabetical(visitedIds.filter(id => !dates.has(id)));
       if (history.length) body.insertAdjacentHTML('beforeend', `<section class="stamp-day"><h3>Visit history only</h3><p class="muted">These visits do not record a collected stamp.</p><ul class="stamp-list">${history.map(id => this.row(id)).join('')}</ul></section>`);
     }
-    if (editorId && field) {
-      const form = [...this.root.querySelectorAll<HTMLFormElement>('[data-editor]')].find(f => f.dataset.editor === editorId);
-      const input = form?.elements.namedItem(field) as HTMLInputElement | HTMLTextAreaElement | null;
-      input?.focus({ preventScroll: true });
-      if (selection && input instanceof HTMLTextAreaElement) input.setSelectionRange(selection[0], selection[1]);
-    }
     scroll.scrollTop = top;
   }
   private async click(e: MouseEvent) {
@@ -142,20 +115,9 @@ export class PassportCollection {
       this.view = d.view; this.draw(); return;
     }
     if ('explore' in d) this.actions.explore();
-    if (d.map) this.actions.showMap(d.map);
-    if (d.add || d.editVisit) {
-      const v = this.state.visits.find(v => v.id === d.editVisit);
-      const id = d.add ?? v!.airportId;
-      if (this.drafts.has(id)) { this.notice('Finish or cancel the open visit draft first.'); return; }
-      this.drafts.set(id, { id: v?.id, date: v?.visitedAt ?? today(), notes: v?.notes ?? '', revision: this.state.revision });
-      this.opened.add(`airport:${id}`); this.draw(); this.focusEditor(id); return;
-    }
-    if (d.cancelEdit) { this.drafts.delete(d.cancelEdit); this.draw(); this.focusRow(d.cancelEdit); }
-    if (d.deleteVisit) {
-      this.busy = true; button.disabled = true;
-      try { if (await this.actions.delete(d.deleteVisit, this.state.revision)) { this.notice('Visit deleted.', true); this.draw(); this.root.querySelector<HTMLElement>('.collection-status')!.tabIndex = -1; (this.root.querySelector('.collection-status') as HTMLElement).focus(); } }
-      catch (error) { this.notice(error instanceof Error ? error.message : 'Could not delete the visit. Try again.'); }
-      finally { this.busy = false; button.disabled = false; }
+    if (d.details) {
+      if (this.ordering) { this.notice('Save or cancel the current order before opening airport details.'); return; }
+      this.actions.showDetails(d.details);
     }
     if (d.reorder) {
       if (this.ordering) { this.notice('Save or cancel the current order first.'); return; }
@@ -173,23 +135,6 @@ export class PassportCollection {
       finally { this.busy = false; button.disabled = false; }
     }
   }
-  private async submit(form: HTMLFormElement) {
-    if (this.busy) return;
-    const id = form.dataset.editor!; const draft = this.drafts.get(id)!;
-    if (!isCalendarDate(draft.date) || draft.date > today()) { this.notice('Choose a valid date today or earlier.'); return; }
-    this.busy = true;
-    const submit = form.querySelector<HTMLButtonElement>('[type="submit"]')!; submit.disabled = true;
-    const wasCollected = collectionDates(this.state.visits).has(id);
-    try {
-      if (await this.actions.save(id, draft)) {
-        this.drafts.delete(id); this.draw(); this.focusRow(id);
-        this.notice(wasCollected || !collectionDates(this.state.visits).has(id) ? 'Visit saved on this device.' : `Stamp added last for ${draft.date}. You can change its order.`, true);
-      }
-    } catch (error) { this.notice(error instanceof Error ? error.message : 'Could not save. Your entries are kept; check device storage and try again.'); }
-    finally { this.busy = false; submit.disabled = false; }
-  }
-  private focusEditor(id: string) { [...this.root.querySelectorAll<HTMLFormElement>('[data-editor]')].find(f => f.dataset.editor === id)?.querySelector<HTMLInputElement>('input')?.focus(); }
-  private focusRow(id: string) { [...this.root.querySelectorAll<HTMLElement>('[data-stamp]')].find(f => f.dataset.stamp === id)?.querySelector('summary')?.focus(); }
   private handle(id: string) { return [...this.root.querySelectorAll<HTMLButtonElement>('[data-handle]')].find(b => b.dataset.handle === id); }
   private reorderButton(date?: string) { return [...this.root.querySelectorAll<HTMLButtonElement>('[data-reorder]')].find(b => b.dataset.reorder === date); }
   private lift(id: string, pointer?: number) {

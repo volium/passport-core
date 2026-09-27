@@ -11,7 +11,7 @@ import { PassportStore } from './persistence.js';
 import type { AirportDefinition, AirportFilters, CheckIn, PassportBackup, PassportProgram } from './models.js';
 
 const escape = (text: string): string => text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-const airportLabel = (airport: AirportDefinition): string => airport.identifiers?.faa?.trim() || airport.id;
+const airportLabel = (airport: Pick<AirportDefinition, 'id' | 'identifiers'>): string => airport.identifiers?.faa?.trim() || airport.id;
 const localDate = (): string => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; };
 const visitId = (): string => Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
 
@@ -30,7 +30,8 @@ export class PassportApp {
   private exploreDrafts = new Map<string, { id: string; date: string; notes: string; revision: number }>();
   private detailEditors = new Set<string>();
   private detailSections = new Map<string, Set<string>>();
-  private selected?: AirportDefinition;
+  private selected?: Omit<AirportDefinition, 'location'> & { location?: AirportDefinition['location'] };
+  private passportReturn?: { id: string; top: number };
   private filters: AirportFilters = { query: '', regionId: '', visited: 'all' };
   private events = new AbortController();
   private resize?: ResizeObserver;
@@ -75,22 +76,17 @@ export class PassportApp {
       </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><section id="airport-preview" class="airport-preview" hidden aria-label="Selected airport"><div><strong id="preview-name"></strong><p id="preview-meta"></p></div><div class="preview-actions"><button id="preview-details" type="button">View details</button><button id="preview-close" type="button" aria-label="Dismiss airport preview">Close</button></div></section><div class="map-caption"><div class="map-legend"><span class="map-legend-item"><span class="map-legend-marker" aria-hidden="true"></span>Not visited</span><span class="map-legend-item"><span class="map-legend-marker is-visited" aria-hidden="true"></span>Visited</span></div><button id="fit" type="button">Show all matches</button></div></section></div>
       ${offlineCard}`;
     this.collection = new PassportCollection(this.el('#passport-collection'), p, {
-      save: async (airportId, draft) => {
-        const edit = this.visits.find(v => v.id === draft.id);
-        const now = new Date().toISOString();
-        return this.saveRecord({ id: draft.id ?? visitId(), programId: p.id, airportId, visitedAt: draft.date, timeKnown: false, createdAt: edit?.createdAt ?? now, updatedAt: now, notes: draft.notes, verification: { status: 'unverified' } }, draft.revision);
-      },
-      delete: (id, revision) => this.deleteRecord(id, revision),
       order: async (order, revision) => { try { await this.store.saveOrder(order, revision); } catch (error) { await this.reloadPassport(); throw error; } await this.reloadPassport(); this.render(); },
-      showMap: id => {
-        const airport = p.airports.find(a => a.id === id);
-        if (!airport) return;
+      showDetails: id => {
+        const airport = p.airports.find(a => a.id === id) ?? {
+          id, name: id, regionId: '', description: 'Airport information is no longer available in the program data.', participation: { participating: false },
+        };
         if (!filterAirports(p, this.visits, this.filters).some(a => a.id === id)) {
           this.filters = { query: '', regionId: '', visited: 'all' };
           for (const selector of ['#search', '#region']) this.el<HTMLInputElement>(selector).value = '';
           this.el<HTMLSelectElement>('#visited').value = 'all';
         }
-        this.select(airport);
+        this.select(airport, false, true);
       },
       explore: () => this.setPassportOpen(false),
     });
@@ -279,8 +275,10 @@ export class PassportApp {
     const visibleLabels = new Set<string>();
     const occupied: { left: number; right: number; top: number; bottom: number }[] = [];
     const size = this.map.getSize();
-    const markerPositions = airports.map(airport => ({ id: airport.id, point: this.map.latLngToContainerPoint([airport.location.latitude, airport.location.longitude]) }));
-    const candidates = airports.filter(airport => {
+    const retired = p.airports.find(a => a.id === this.selected?.id && !a.participation.participating);
+    const mapAirports = retired ? [...airports, retired] : airports;
+    const markerPositions = mapAirports.map(airport => ({ id: airport.id, point: this.map.latLngToContainerPoint([airport.location.latitude, airport.location.longitude]) }));
+    const candidates = mapAirports.filter(airport => {
       const point = this.map.latLngToContainerPoint([airport.location.latitude, airport.location.longitude]);
       return point.x >= 0 && point.x <= size.x && point.y >= 0 && point.y <= size.y;
     });
@@ -299,17 +297,18 @@ export class PassportApp {
       occupied.push(rect);
     }
     if (!labelsFit) visibleLabels.clear();
-    this.map.airports(airports, p.regions, visited, this.selected?.id, compact, visibleLabels);
+    this.map.airports(mapAirports, p.regions, visited, this.selected?.id, compact, visibleLabels);
     const progress = calculateProgress(p, this.visits);
     this.el('#overall').innerHTML = `<div><strong>${progress.visited}<span> / ${progress.total}</span></strong><span>airports visited</span></div><progress aria-label="Overall progress" value="${progress.visited}" max="${progress.total || 1}"></progress>`;
   }
 
-  private select(airport: AirportDefinition, fromMap = false) {
+  private select(airport: NonNullable<PassportApp['selected']>, fromMap = false, fromPassport = false) {
+    this.passportReturn = fromPassport ? { id: airport.id, top: this.el('.passport-content').scrollTop } : undefined;
     if (this.passportOpen) this.setPassportOpen(false, false);
     if (!this.selected) this.lastFocus = document.activeElement as HTMLElement;
     this.rememberExploreDraft();
     this.selected = airport;
-    if (fromMap && matchMedia('(max-width: 760px)').matches) {
+    if (fromMap && airport.location && matchMedia('(max-width: 760px)').matches) {
       this.previewOnly = true;
       this.el('#detail').hidden = true;
       this.el('.browse').hidden = false;
@@ -328,7 +327,7 @@ export class PassportApp {
       this.render();
       return;
     }
-    this.map.panTo([airport.location.latitude, airport.location.longitude]);
+    if (airport.location) this.map.panTo([airport.location.latitude, airport.location.longitude]);
     this.render();
     this.renderDetail();
     this.el<HTMLButtonElement>('#close-detail').focus();
@@ -336,6 +335,7 @@ export class PassportApp {
 
   private closeDetail(restoreFocus = true) {
     this.rememberExploreDraft();
+    const returnTo = this.passportReturn; this.passportReturn = undefined;
     this.selected = undefined;
     this.previewOnly = false;
     this.el('#airport-preview').hidden = true;
@@ -344,6 +344,7 @@ export class PassportApp {
     this.el('.browse').hidden = false;
     this.render();
     this.syncPanels();
+    if (restoreFocus && returnTo) { this.setPassportOpen(true, false); this.collection?.restoreFocus(returnTo.id, returnTo.top); return; }
     if (!restoreFocus) this.el('#map').focus({ preventScroll: true });
     else if (this.lastFocus?.isConnected) this.lastFocus.focus(); else this.el('#search').focus();
   }
@@ -353,7 +354,7 @@ export class PassportApp {
     this.el('#airport-preview').hidden = true;
     this.el('.map-section').classList.remove('has-preview');
     const airport = this.selected!;
-    const region = this.program.regions.find(r => r.id === airport.regionId)!;
+    const region = this.program.regions.find(r => r.id === airport.regionId) ?? { name: 'Region unavailable', color: '#666666' };
     const detail = this.el('#detail');
     detail.hidden = false;
     this.syncPanels();
@@ -365,7 +366,8 @@ export class PassportApp {
     this.detailSections.set(airport.id, sections);
     const editorOpen = !!edit || !!draft || this.detailEditors.has(airport.id);
     if (editorOpen) this.detailEditors.add(airport.id);
-    detail.innerHTML = `<button id="close-detail" type="button" class="back-button">← All airports</button><header class="airport-overview"><h2>${escape(airport.name)}</h2><p class="airport-identity"><span>${escape(airportLabel(airport))}</span><span class="airport-region" style="--region:${region.color}"><span class="region-dot" aria-hidden="true"></span>${escape(region.name)}</span></p><p id="airport-visit-summary" class="muted">${stampDate ? 'Visited &middot; Stamp collected ' + stampDate : visits.length ? 'Visited &middot; No stamp recorded' : 'Not visited yet'}</p></header>
+    detail.innerHTML = `<button id="close-detail" type="button" class="back-button">← ${this.passportReturn ? 'Back to My Passport' : 'All airports'}</button><header class="airport-overview"><h2>${escape(airport.name)}</h2><p class="airport-identity"><span>${escape(airportLabel(airport))}</span><span class="airport-region" style="--region:${region.color}"><span class="region-dot" aria-hidden="true"></span>${escape(region.name)}</span></p><p id="airport-visit-summary" class="muted">${stampDate ? 'Visited &middot; Stamp collected ' + stampDate : visits.length ? 'Visited &middot; No stamp recorded' : 'Not visited yet'}</p></header>
+    ${!airport.participation.participating ? '<p class="airport-caution participation-notice">' + (airport.location ? 'No longer part of the program. Visits remain available but do not count toward current program completion.' : 'Airport information is unavailable. Saved visits remain accessible, but no map location can be shown and they do not count toward current program completion.') + '</p>' : ''}
     ${airport.cautions?.map(c => `<p class="airport-caution">${escape(c)}</p>`).join('') ?? ''}
     <details class="airport-information detail-disclosure" data-detail-section="information" ${sections.has('information') ? 'open' : ''}><summary>Airport information</summary><p>${escape(airport.description)}</p>${airport.address ? `<p class="airport-address">${escape(airport.address)}</p>` : ''}
 
@@ -421,7 +423,7 @@ export class PassportApp {
     detail.querySelectorAll<HTMLButtonElement>('[data-delete]').forEach(button => button.addEventListener('click', () => void this.deleteVisit(button.dataset.delete!)));
   }
 
-  private async saveVisit(form: HTMLFormElement, airport: AirportDefinition, edit?: CheckIn) {
+  private async saveVisit(form: HTMLFormElement, airport: NonNullable<PassportApp['selected']>, edit?: CheckIn) {
     const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     if (form.hidden || button.disabled) return;
     this.el('#save-status').classList.remove('sr-only');
