@@ -82,3 +82,17 @@ describe('IndexedDB integration', () => {
     await reopened.close(); await other.close();
   });
 });
+
+
+it('orders filtered airports by program region sequence and then name without changing source data', () => {
+  const p = structuredClone(program);
+  p.regions.reverse(); p.airports.reverse();
+  p.airports.find(a => a.id === 'A0')!.name = 'Zulu';
+  p.airports.find(a => a.id === 'A1')!.name = 'Alpha';
+  const before = structuredClone(p.airports);
+  const filters = { query: '', regionId: '', visited: 'all' as const };
+  expect(filterAirports(p, [], filters).map(a => a.id)).toEqual(['A4', 'A5', 'A2', 'A3', 'A1', 'A0']);
+  expect(filterAirports(p, [], { ...filters, regionId: 'a' }).map(a => a.id)).toEqual(['A1', 'A0']);
+  expect(filterAirports(p, [visit('A0'), visit('A4')], { ...filters, visited: 'visited' }).map(a => a.id)).toEqual(['A4', 'A0']);
+  expect(p.airports).toEqual(before);
+});

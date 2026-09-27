@@ -73,12 +73,12 @@ progress::-moz-progress-bar { background: var(--region, #438262); }
 .passport-section { margin: 22px 0; }
 .passport-section > h3 { margin-bottom: 14px; }
 .region-cards { display: grid; grid-template-columns: 1fr; gap: 12px; }
-.region-card { padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.region-card { padding: 20px; background: var(--surface); background: color-mix(in srgb, var(--region) 8%, var(--surface)); border: 1px solid var(--border); border-inline-start: 6px solid var(--region); border-radius: 12px; }
 .region-card > div { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
 .region-card h3 { flex: 1; }
 .region-card span:last-child, .region-card small { font-size: 12px; color: var(--muted); }
 .region-card small { display: block; margin-top: 10px; }
-.region-dot { width: 10px; height: 10px; background: var(--region); border-radius: 50%; }
+.region-dot { width: 14px; height: 14px; flex: 0 0 14px; background: var(--region); border: 1px solid var(--border); border-radius: 50%; }
 .data-notice { color: var(--muted); font-size: 12px; }
 .backup-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .backup-actions > button, .backup-actions > .button { display: inline-flex; align-items: center; justify-content: center; flex: 1 1 130px; font: inherit; font-size: 14px; line-height: 1.4; text-align: center; }

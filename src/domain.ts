@@ -53,10 +53,13 @@ export function calculateProgress(program: PassportProgram, visits: CheckIn[]) {
 
 export function filterAirports(program: PassportProgram, visits: CheckIn[], filters: AirportFilters) {
   const visitedIds = new Set(visits.filter(v => v.programId === program.id).map(v => v.airportId));
+  const regionOrder = new Map(program.regions.map((region, index) => [region.id, index]));
   return program.airports.filter(a => a.participation.participating &&
     `${a.name} ${a.id} ${Object.values(a.identifiers ?? {}).join(' ')}`.toLowerCase().includes(filters.query.trim().toLowerCase()) &&
     (!filters.regionId || a.regionId === filters.regionId) &&
-    (filters.visited === 'all' || visitedIds.has(a.id) === (filters.visited === 'visited')));
+    (filters.visited === 'all' || visitedIds.has(a.id) === (filters.visited === 'visited'))).sort((a, b) =>
+      regionOrder.get(a.regionId)! - regionOrder.get(b.regionId)! ||
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }) || a.id.localeCompare(b.id));
 }
 
 export function isCalendarDate(value: string): boolean {
