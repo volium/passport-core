@@ -14,15 +14,15 @@ test('core mounts, filters, preserves drafts, installs, reopens and deletes inde
   await page.goto('/tests/browser/app.html');
   await expect(page.locator('.airport-map-hit')).toHaveCount(2);
   await page.locator('[data-airport="AAA"]').click();
-  await page.getByLabel('Notes', {exact:false}).fill('Keep this draft');
+  if (await page.locator('#open-visit-editor').isVisible()) await page.locator('#open-visit-editor').click(); if (await page.locator('#open-visit-editor').isVisible()) await page.locator('#open-visit-editor').click(); await page.getByLabel('Notes', {exact:false}).fill('Keep this draft');
   await page.locator('#offline-access').click();
   await page.locator('#map-download').click();
   await expect(page.locator('#map-status')).toContainText('Map available on this device');
   await page.locator('#offline-close').click();
   await expect(page.getByLabel('Notes',{exact:false})).toHaveValue('Keep this draft');
-  await page.getByRole('button',{name:'Save check-in'}).click();
+  if (await page.locator('#open-visit-editor').isVisible()) await page.locator('#open-visit-editor').click(); await page.getByRole('button',{name:'Save check-in'}).click();
   // A click does not await the asynchronous IndexedDB save. Reload only after confirmation.
-  await expect(page.getByRole('button',{name:'Visit saved',exact:true})).toBeVisible();
+  await expect(page.locator('#checkin')).toBeHidden(); await expect(page.locator('#visit-save-confirmation')).toHaveText('Visit saved on this device.');
   await expect(page.locator('#overall strong')).toHaveText('1 / 2');
   await page.reload();
   await expect(page.locator('.airport-map-hit')).toHaveCount(2);
@@ -54,7 +54,7 @@ test('passport remains usable without WebGL', async ({ page }) => {
   await page.goto('/tests/browser/app.html');
   await expect(page.locator('#map')).toContainText('Interactive maps are unavailable');
   await page.locator('[data-airport="AAA"]').click();
-  await page.getByRole('button',{name:'Save check-in'}).click();
+  if (await page.locator('#open-visit-editor').isVisible()) await page.locator('#open-visit-editor').click(); await page.getByRole('button',{name:'Save check-in'}).click();
   await expect(page.locator('#overall strong')).toHaveText('1 / 2');
 });
 
@@ -101,7 +101,7 @@ test('missing secure-context map APIs explain the limitation and leave passport 
   await expect(page.locator('#map-status')).toContainText('cannot safely coordinate map downloads');
   await page.locator('#offline-close').click();
   await page.locator('[data-airport="AAA"]').click();
-  await page.getByRole('button',{name:'Save check-in'}).click();
+  if (await page.locator('#open-visit-editor').isVisible()) await page.locator('#open-visit-editor').click(); await page.getByRole('button',{name:'Save check-in'}).click();
   await expect(page.locator('#overall strong')).toHaveText('1 / 2');
 });
 
@@ -174,7 +174,7 @@ test('offline card is independent, dismissible, and hides granted protection', a
   await setup.locator('summary').click();await expect(setup).toHaveAttribute('open','');
   await page.keyboard.press('Space');await expect(setup).not.toHaveAttribute('open','');
   await page.keyboard.press('Escape');await expect(page.locator('#offline-card')).toBeHidden();await expect(page.locator('#offline-access')).toBeFocused();
-  await page.locator('[data-airport="AAA"]').click();await page.getByLabel('Notes',{exact:false}).fill('Card preserves draft');
+  await page.locator('[data-airport="AAA"]').click();if (await page.locator('#open-visit-editor').isVisible()) await page.locator('#open-visit-editor').click(); await page.getByLabel('Notes',{exact:false}).fill('Card preserves draft');
   await page.locator('#offline-access').click();await page.locator('#map-download').click();
   await expect(page.locator('#map-status')).toContainText('Map available on this device');
   await expect(page.locator('#map-delete')).toHaveCount(0);
@@ -380,3 +380,20 @@ for (const viewport of [{width:1440,height:900},{width:390,height:844}]) {
     expect((await camera()).zoom).toBeCloseTo(chosen.zoom,7);
   });
 }
+
+
+test('failed visit save keeps the editor and its draft open', async ({ page }) => {
+  await page.goto('/tests/browser/app.html');
+  await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'false');
+  await page.locator('[data-airport="AAA"]').click(); await page.locator('#open-visit-editor').click();
+  await page.locator('#checkin [name="notes"]').fill('Keep this after failure');
+  await page.evaluate(() => {
+    const app = (window as unknown as { fixtureApp: { store: { save: () => Promise<void> } } }).fixtureApp;
+    app.store.save = async () => { throw new Error('Storage unavailable'); };
+  });
+  await page.locator('#checkin [type="submit"]').click();
+  await expect(page.locator('#save-status')).toHaveText('Storage unavailable');
+  await expect(page.locator('#checkin')).toBeVisible();
+  await expect(page.locator('#checkin [name="notes"]')).toHaveValue('Keep this after failure');
+  await expect(page.locator('#visit-save-confirmation')).toBeEmpty();
+});

@@ -9,7 +9,8 @@ This contract applies to the reusable core in every consuming app and both layou
 | File chooser instructions | Visible until selection, cancellation, a detected opening error, or another import attempt. Do not infer failure from elapsed time. |
 | Preparing export / importing | Visible until completion or failure. Disable the initiating action during asynchronous work. |
 | Backup error | Visible until another attempt replaces it. Explain recovery without claiming success or guessing that private browsing is unsupported. |
-| Visit saved / deleted | Existing approved four-second disabled button confirmation and live announcement; deletion then collapses the saved detail. Preserve unfinished fields. |
+| Visit saved | Close the Explore editor after persistence succeeds, clear its draft/open state, and return focus to the recording action. Show a five-second live confirmation beneath that action. Failed/cancelled saves retain the editor and fields. |
+| Visit deleted | Four-second disabled button confirmation and live announcement; deletion then collapses the saved history entry. Preserve unfinished fields. |
 | Visit, storage, or renderer error | Remains while actionable; cleared by the owning workflow on retry or resolution. |
 | Offline readiness, progress, storage protection | Persistent state, updated from actual lifecycle/capability results; never removed by a backup timer. Granted protection remains quiet. |
 

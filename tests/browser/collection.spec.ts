@@ -104,7 +104,7 @@ test('earlier visit asks before moving a stamp; cancellation keeps input and rep
 test('stale ordering draft cannot overwrite another tab and cancelled drafts reveal latest visits', async ({ page, context }) => {
   await seed(page); await stamps(page); await page.locator('[data-reorder="2026-09-10"]').click();
   const other = await context.newPage(); await other.goto('/tests/browser/app.html?collection=1');
-  await other.locator('[data-airport="AAA"]').click(); await other.getByLabel('Notes').fill('A concurrent visit'); await other.getByRole('button', { name: 'Save check-in' }).click(); await expect(other.getByRole('button', { name: 'Visit saved', exact: true })).toBeVisible();
+  await other.locator('[data-airport="AAA"]').click(); if (await other.locator('#open-visit-editor').isVisible()) await other.locator('#open-visit-editor').click(); await other.getByLabel('Notes').fill('A concurrent visit'); await other.getByRole('button', { name: 'Save check-in' }).click(); await expect(other.locator('#checkin')).toBeHidden(); await expect(other.locator('#visit-save-confirmation')).toHaveText('Visit saved on this device.');
   await page.bringToFront(); await page.locator('[data-save-order]').click();
   await expect(page.locator('.collection-status')).toContainText('another operation or tab');
   await expect(page.locator('[data-cancel-order]')).toBeVisible(); await page.locator('[data-cancel-order]').click();
@@ -166,6 +166,7 @@ test.describe('touch collection', () => {
 
 test('Explore confirmation Escape preserves its draft and editing history cannot overwrite it', async ({ page }) => {
   await seed(page); await page.locator('#explore-tab').click(); await page.locator('[data-airport="AAA"]').click();
+  await page.locator('#open-visit-editor').click();
   await page.locator('#checkin [name="date"]').fill('2026-09-09');
   await page.locator('#checkin [name="notes"]').fill('Unfinished earlier visit');
   await page.locator('#checkin [type="submit"]').click();
@@ -173,10 +174,11 @@ test('Explore confirmation Escape preserves its draft and editing history cannot
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('#detail')).toBeVisible();
   await expect(page.locator('#checkin [name="notes"]')).toHaveValue('Unfinished earlier visit');
+  if (await page.locator('#visit-history').getAttribute('open') === null) await page.locator('#history-heading').click();
   await page.locator('#detail [data-edit]').first().click();
   await expect(page.locator('#save-status')).toContainText('Save or cancel your current draft');
   await expect(page.locator('#checkin [name="notes"]')).toHaveValue('Unfinished earlier visit');
-  await page.locator('#cancel-visit-draft').click(); await page.locator('#detail [data-edit]').first().click();
+  await page.locator('#cancel-visit-draft').click(); await page.getByRole('button', { name: 'Discard draft', exact: true }).click(); await page.locator('#detail [data-edit]').first().click();
   await expect(page.locator('#checkin [name="notes"]')).toHaveValue('Original AAA');
 });
 
@@ -242,6 +244,7 @@ for (const surface of ['Passport', 'Explore']) test('deleting a stamp visit upda
   await row.getByRole('button', { name: 'Save check-in' }).click();
   await expect(row).toContainText('2 visits');
   if (surface === 'Explore') await row.getByRole('button', { name: 'Show on map', exact: true }).click();
+  if (surface === 'Explore') await page.locator('#history-heading').click();
   const history = surface === 'Explore' ? page.locator('#detail .history') : row.locator('.history');
   const remove = history.locator('article').filter({ hasText: 'Original AAA' }).getByRole('button', { name: 'Delete', exact: true });
   await remove.click();

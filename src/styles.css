@@ -217,3 +217,21 @@ progress::-moz-progress-bar { background: var(--region, #438262); }
 .passport-app input[type='date'] { display: block; width: 100%; min-width: 0; max-width: 100%; -webkit-appearance: none; appearance: none; }
 .passport-app input[type='date']::-webkit-date-and-time-value { min-width: 0; text-align: left; }
 .collection-airport, .collection-airport form, .collection-airport form label { min-width: 0; max-width: 100%; }
+
+/* Compact airport overview and intentional visit editing. */
+.detail .back-button { margin-bottom: 12px; }
+.airport-overview h2 { margin: 0 0 8px; }
+.airport-identity, .airport-region { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.airport-identity { gap: 12px; margin: 0; color: var(--muted); }
+.airport-region .region-dot { width: 10px; height: 10px; flex-basis: 10px; }
+.airport-overview { margin-bottom: 20px; }
+.detail-disclosure { border-top: 1px solid var(--border); padding: 14px 0; margin-top: 16px; }
+.detail-disclosure > summary { cursor: pointer; font-weight: 600; min-height: 44px; align-content: center; }
+.detail #checkin { margin-top: 20px; padding-top: 2px; border-top: 1px solid var(--border); }
+.visit-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.visit-actions > button { flex: 1 1 130px; margin: 0; width: auto; }
+#save-status:not(:empty) { margin: 12px 0 0; }
+.detail .airport-stamps h3 { margin-top: 0; }
+
+.stamp > small { display: block; margin: 6px 0; }
+.stamp-instructions > summary { cursor: pointer; min-height: 44px; align-content: center; font-weight: 600; }
