@@ -132,6 +132,7 @@ test.describe('touch gestures', () => {
     await page.goto('/tests/browser/app.html');
     const marker = page.locator('.airport-map-hit').first();
     await expect(marker).toBeVisible();
+    await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'false');
     await page.evaluate(() => (window as unknown as { fixtureApp: { map: { map: import('maplibre-gl').Map } } }).fixtureApp.map.map.jumpTo({ center: [-120, 47], zoom: 10 }));
     const box = (await marker.boundingBox())!;
     const x = box.x + box.width / 2, y = box.y + box.height / 2;

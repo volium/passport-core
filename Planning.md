@@ -4,7 +4,9 @@
 
 ## Architecture, Requirements, and Implementation Plan
 
-**Passport planning update (2026-09-20):** Core 0.6.5 and its consuming package have been committed and pushed with the owner-tested map-fit fixes. The next approved product direction is expandable regional passport cards plus My stamps, first-visit collection, and persistent same-day drag ordering. This is planned, not implemented; see Sections 23-25, Phase P1, and [the Passport collection specification](docs/PASSPORT-COLLECTION.md). Earlier milestone statuses below remain historical. No new implementation or deployment is authorized by this documentation update.
+**Passport implementation candidate (2026-09-26):** After the planning commits, the owner authorized implementation. Core 0.7.0 now implements Phase P1 locally, with additive database v2 migration and v2 backups (v1 import retained), expandable regional cards, My stamps, date-restricted drag/keyboard ordering, and confirmation/reconciliation. The schema and conflict decisions are recorded in [docs/PASSPORT-COLLECTION.md](docs/PASSPORT-COLLECTION.md). Implementation remains uncommitted and unpushed pending owner testing. Earlier planning/milestone notices below are historical.
+
+**Historical Passport planning record (2026-09-20):** Core 0.6.5 and its consuming package have been committed and pushed with the owner-tested map-fit fixes. The next approved product direction is expandable regional passport cards plus My stamps, first-visit collection, and persistent same-day drag ordering. This is planned, not implemented; see Sections 23-25, Phase P1, and [the Passport collection specification](docs/PASSPORT-COLLECTION.md). Earlier milestone statuses below remain historical. No new implementation or deployment is authorized by this documentation update.
 
 **Status (2026-09-19):** Core 0.6.0 implements the approved Phase U1 offline-access card and setup/status behavior in the working tree. Fly Washington integrates the packaged core and app-owned installation guidance. Physical installed-PWA acceptance and deployment of this revision remain pending. MapLibre/PMTiles and chunked IndexedDB remain the storage/rendering architecture. Section 32.3 records the implemented browser-manual/PWA-automatic setup policy; Sections 32.4-32.5, 34.1, 58.2, and Phase U1 define feedback, recovery, installed-app behavior, and acceptance. No implementation, commit, or deployment is authorized by this planning record alone.
 
@@ -125,7 +127,7 @@ Examples include:
 - airport selection;
 - filtering;
 - check-ins;
-- explicit per-program/date stamp ordering and confirmation metadata (planned Phase P1);
+- explicit per-program/date stamp ordering and confirmation metadata (Phase P1; local candidate);
 - progress calculation;
 - achievement evaluation;
 - local persistence;
@@ -1185,7 +1187,7 @@ This enables future features such as:
 
 # 25. Visit Ordering
 
-The approved Passport collection behavior is specified in [docs/PASSPORT-COLLECTION.md](docs/PASSPORT-COLLECTION.md). It is not implemented in core 0.6.5. The original vertical slice did not require custom ordering; Phase P1 now explicitly requires it.
+The approved Passport collection behavior is specified in [docs/PASSPORT-COLLECTION.md](docs/PASSPORT-COLLECTION.md). It was not implemented in core 0.6.5; the local 0.7.0 candidate now implements it. The original vertical slice did not require custom ordering; Phase P1 now explicitly requires it.
 
 ## 25.1 Passport views
 
@@ -1199,7 +1201,7 @@ Persist saved ordering separately from visit dates and future GPS timestamps; ne
 
 ## 25.3 Implementation decisions and compatibility
 
-Core owns the reusable views, ordering, persistence, migrations, feedback, and tests; programs own regions, airports, branding, and completion rules. No basemap availability is required. Review the precise ordering/confirmation schema, versioned backup extension, earliest-visit deletion/edit semantics, and import/concurrent-order conflicts before implementation. Existing v1 backups remain importable and existing explicit orders must not be erased by a backup lacking order metadata. Full requirements and acceptance are in the linked specification.
+Core owns the reusable views, ordering, persistence, migrations, feedback, and tests; programs own regions, airports, branding, and completion rules. No basemap availability is required. The local candidate uses per-date airport IDs and a confirmed flag, additive database v2 migration, v2 backups, earliest-visit reconciliation, confirmed-local-order precedence on import, and revision-checked transactions. See the implemented decisions in the specification. Existing v1 backups remain importable and existing explicit orders must not be erased by a backup lacking order metadata. Full requirements and acceptance are in the linked specification.
 
 ---
 
@@ -1322,7 +1324,7 @@ Local persistence should contain concepts such as:
 
 - program metadata/version;
 - check-ins;
-- explicit per-program/date collection ordering and confirmation metadata (planned Phase P1);
+- explicit per-program/date collection ordering and confirmation metadata (Phase P1; local candidate);
 - verification evidence;
 - attachment metadata;
 - preferences;
@@ -1342,7 +1344,7 @@ Example:
 
 ```ts
 {
-    schemaVersion: 1
+    schemaVersion: 2
 }
 ```
 
@@ -1350,7 +1352,7 @@ When local data structures evolve, the application must use explicit migrations.
 
 Avoid depending on browser storage layouts that cannot be upgraded deterministically.
 
-Migration tests should be added when schema versions change. Phase P1 requires an explicit ordering migration preserving existing visits and unconfirmed same-day order; its exact schema is pending the Section 25.3 review.
+Migration tests should be added when schema versions change. Phase P1 requires an explicit ordering migration preserving existing visits and unconfirmed same-day order; its implemented schema and conflict policies are documented under Section 25.3 and docs/PASSPORT-COLLECTION.md.
 
 ---
 
@@ -1872,15 +1874,16 @@ Conceptual shape:
 ```json
 {
   "format": "aviation-passport",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "programId": "fly-washington",
   "exportedAt": "2026-09-06T18:00:00Z",
   "checkIns": [],
+  "orders": [],
   "attachments": []
 }
 ```
 
-The actual schema should be formally documented and tested. The example above describes the current v1 shape, not the planned ordering extension. Phase P1 must version and round-trip explicit collection order and confirmation metadata, retain v1 import support, and reject invalid cross-date/duplicate references before persistence; see Section 25.3.
+The actual schema should be formally documented and tested. The example above describes the v2 export envelope used by the local Phase P1 candidate. Each nonempty collection has orders entries containing date, airportIds, and confirmed. The importer retains v1 support and rejects invalid cross-date/duplicate references before persistence; see Section 25.3.
 
 ---
 
@@ -1900,7 +1903,7 @@ Import should:
 6. present useful errors;
 7. avoid silently destroying existing user data.
 
-Merge behavior should be explicitly designed. Phase P1 adds order/date-conflict review: a v1 import must not erase an existing explicit order, and differing explicit orders or earlier imported visits must not silently change collection history. Resolve the detailed policy before implementing the new backup schema.
+Merge behavior should be explicitly designed. Phase P1 adds order/date-conflict review: a v1 import must not erase an existing explicit order, and differing explicit orders or earlier imported visits must not silently change collection history. The implemented policy is explicit confirmation for date/order conflicts, confirmed local order taking precedence, and a revision-checked atomic merge.
 
 At minimum, duplicate check-in IDs must not create duplicate records.
 
@@ -2194,7 +2197,7 @@ Phase U1 must cover manual browser downloads and automatic initial standalone pr
 
 ---
 
-## 58.3 Passport collection acceptance (planned Phase P1)
+## 58.3 Passport collection acceptance (Phase P1; local candidate)
 
 Validate expandable regions and alphabetical airport rows, visited/nonvisited text and icons, one stamp per airport with repeat history, alphabetical/collection-date views, same-day-only pointer and keyboard dragging, ordinary touch scrolling outside handles, Save/Cancel, earlier-date confirmation, and legacy unconfirmed ordering. Include migration and backup round trips, conflicting imports, concurrent edits, failed saves, last-visit deletion, nonparticipating airport history, drafts/focus preservation, and operation without a basemap. Use synthetic core programs plus consuming-app and physical-phone acceptance; see the detailed checklist in docs/PASSPORT-COLLECTION.md.
 
@@ -2540,14 +2543,14 @@ Design-review artifact (2026-09-13): `fly-washington/docs/mockups/offline-access
 
 Exit criteria: users can discover and complete offline setup without searching My passport; they can see current progress and accurate readiness on both layouts; a verified package survives tested installed-app restart and supports all resources offline; stale warnings recover, healthy maps have no normal Delete action, and repair/cancellation are clear; saved visits and drafts remain intact.
 
-## Phase P1 — Passport collection (approved direction; not implemented)
+## Phase P1 — Passport collection (implemented locally; owner acceptance pending)
 
-1. Review ordering metadata, local migration, export version, correction/deletion semantics, and import/concurrency conflict policy under Section 25.3.
+1. Ordering metadata, local migration, export version, correction/deletion semantics, and import/concurrency policy are recorded under Section 25.3 and the specification.
 2. Implement and test independent core collection projections, storage transactions, migrations, and versioned backup support.
 3. Implement expandable regions, My stamps sorting/history, and same-date drag/keyboard ordering without duplicate overall progress. Reuse visit editing and feedback.
 4. Complete Section 58.3 tests, integrate a new core package in Fly Washington, and validate phone dragging/scrolling and accessibility before acceptance. GPS, named trips, photos, and cloud synchronization remain separate phases.
 
-This phase requires subsequent implementation authorization. No production changes are part of this planning update.
+The owner subsequently authorized implementation. Core and consuming-app code changes remain uncommitted for owner testing; physical acceptance and an instruction to commit remain outstanding.
 
 ## Phase 0 — Repository Foundation
 
@@ -3012,7 +3015,7 @@ The following rules should remain easy to find because violating one generally i
 
 # 78. Immediate Next Steps
 
-**Current next feature (2026-09-20):** Review Phase P1 and docs/PASSPORT-COLLECTION.md, resolve the explicitly listed schema/correction/conflict questions, then obtain the owner's instruction before implementation. Preserve independent core ownership and test from the consuming package. The older U1 follow-up below is retained as historical acceptance context, not an instruction to recreate or republish core 0.6.0.
+**Current next feature (2026-09-20):** Test the uncommitted Phase P1 candidate using docs/PASSPORT-COLLECTION.md. Schema/correction/conflict decisions are now recorded there. Resolve owner feedback before committing the implementation. Preserve independent core ownership and test from the consuming package. The older U1 follow-up below is retained as historical acceptance context, not an instruction to recreate or republish core 0.6.0.
 
 Continue from the implemented MapLibre/PMTiles system and committed core 0.5.1 marker-gesture fix. The owner reports the application deployed and has confirmed desktop/mobile gestures locally; this is not complete installed-PWA offline acceptance. Phase U1 is implemented locally in core 0.6.0; the next work is physical installed-PWA acceptance and review of the uncommitted implementation, not another renderer or storage migration.
 

@@ -1,0 +1,170 @@
+import { test, expect, type Page } from '@playwright/test';
+import { fixture } from '../map-fixture.js';
+
+test.beforeEach(async ({ context }) => {
+  await context.addInitScript(() => localStorage.setItem('passport:independent-core:offline-introduction:browser', 'seen'));
+  const { env } = await fixture();
+  await context.route('https://fixture.invalid/**', async route => { const r = await env.fetch(route.request().url()); await route.fulfill({ status: 200, body: Buffer.from(await r.arrayBuffer()), headers: { 'access-control-allow-origin': '*' } }); });
+});
+const seed = async (page: Page) => {
+  await page.goto('/tests/browser/app.html?collection=1');
+  await page.locator('#passport-tab').click();
+  await page.locator('#import').setInputFiles({ name: 'passport.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ format: 'aviation-passport', schemaVersion: 1, programId: 'independent-core', exportedAt: new Date().toISOString(), attachments: [], checkIns: ['AAA', 'BBB', 'CCC', 'DDD'].map((id, i) => ({ id, programId: 'independent-core', airportId: id, visitedAt: i === 3 ? '2026-09-11' : '2026-09-10', timeKnown: false, createdAt: '2026-09-12T00:00:00Z', updatedAt: '2026-09-12T00:00:00Z', notes: 'Original ' + id, verification: { status: 'unverified' } })) })) });
+  await expect(page.locator('#passport-notice')).toContainText('Imported 4 visits');
+};
+const stamps = async (page: Page) => { await page.getByRole('button', { name: 'My stamps', exact: true }).click(); await page.getByLabel('Sort stamps').selectOption('date'); };
+const ids = (page: Page, date = '2026-09-10') => page.locator(`[data-date="${date}"] [data-stamp]`).evaluateAll(rows => rows.map(r => (r as HTMLElement).dataset.stamp));
+
+test('regions expand, show visited states, preserve drafts across views and leave map independent', async ({ page }) => {
+  await page.goto('/tests/browser/app.html?collection=1');
+  await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'false');
+  await page.locator('#search').fill('AAA');
+  await page.locator('#passport-tab').click();
+  await page.locator('.region-card > summary').click();
+  await expect(page.locator('.collection-row')).toHaveCount(4);
+  const row = page.locator('[data-stamp="BBB"]');
+  await expect(row).toContainText('Not visited'); await row.locator('summary').click();
+  await row.getByRole('button', { name: 'Add a visit', exact: true }).click();
+  await row.getByLabel('Notes').fill('Keep <my> draft');
+  await page.locator('#explore-tab').click(); await expect(page.locator('#search')).toHaveValue('AAA');
+  await page.locator('#passport-tab').click(); await expect(row.getByLabel('Notes')).toHaveValue('Keep <my> draft');
+  await row.getByRole('button', { name: 'Save check-in' }).click();
+  await expect(row).toContainText('Visited'); await expect(page.locator('.collection-status')).toContainText('Stamp added last');
+  await expect(page.locator('#overall strong')).toHaveText('1 / 4');
+  await row.getByRole('button', { name: 'Show on map' }).click();
+  await expect(page.locator('#detail h2')).toHaveText('Airport BBB');
+});
+
+test('keyboard same-day order persists, cancels safely, and round-trips through a versioned backup', async ({ page, context }) => {
+  await seed(page); await stamps(page);
+  await expect(page.locator('[data-date="2026-09-10"]')).toContainText('unconfirmed');
+  await page.locator('[data-reorder="2026-09-10"]').click();
+  const handle = page.locator('[data-handle="AAA"]');
+  await handle.press('Space'); await handle.press('ArrowDown'); await handle.press('ArrowDown'); await handle.press('Space');
+  expect(await ids(page)).toEqual(['BBB', 'CCC', 'AAA']);
+  await page.getByRole('button', { name: 'Save order', exact: true }).click();
+  await expect(page.locator('.collection-status')).toContainText('Collection order saved');
+  await page.reload(); await page.locator('#passport-tab').click(); await stamps(page);
+  expect(await ids(page)).toEqual(['BBB', 'CCC', 'AAA']);
+  await page.locator('[data-reorder="2026-09-10"]').click();
+  await page.locator('[data-handle="AAA"]').press('Space'); await page.locator('[data-handle="AAA"]').press('ArrowUp'); await page.locator('[data-handle="AAA"]').press('Escape');
+  expect(await ids(page)).toEqual(['BBB', 'CCC', 'AAA']);
+  await page.locator('[data-cancel-order]').click();
+  const download = page.waitForEvent('download'); await page.locator('#export').click();
+  const stream = await (await download).createReadStream(); const chunks: Buffer[] = []; for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+  const backup = JSON.parse(Buffer.concat(chunks).toString());
+  expect(backup.schemaVersion).toBe(2); expect(backup.orders[0].airportIds).toEqual(['BBB', 'CCC', 'AAA']);
+  const fresh = await context.browser()!.newContext(); await fresh.addInitScript(() => localStorage.setItem('passport:independent-core:offline-introduction:browser', 'seen'));
+  const other = await fresh.newPage(); await other.goto('/tests/browser/app.html?collection=1'); await other.locator('#passport-tab').click();
+  await other.locator('#import').setInputFiles({ name: 'restored.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
+  await expect(other.locator('#passport-notice')).toContainText('Imported 4 visits'); await stamps(other);
+  expect(await ids(other)).toEqual(['BBB', 'CCC', 'AAA']); await fresh.close();
+});
+
+test('pointer drag changes only its date, invalid drops restore the draft, and touch handles preserve scrolling', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seed(page); await stamps(page); await page.locator('[data-reorder="2026-09-10"]').click();
+  const a = page.locator('[data-handle="AAA"]'), c = page.locator('[data-handle="CCC"]');
+  await c.scrollIntoViewIfNeeded();
+  const from = (await a.boundingBox())!, to = (await c.boundingBox())!;
+  await page.mouse.move(from.x + 10, from.y + 10); await page.mouse.down(); await page.mouse.move(to.x + 10, to.y + to.height, { steps: 8 }); await page.mouse.up();
+  expect(await ids(page)).toEqual(['BBB', 'CCC', 'AAA']);
+  const start = (await a.boundingBox())!;
+  await page.mouse.move(start.x + 10, start.y + 10); await page.mouse.down(); await page.mouse.move(385, 30, { steps: 5 }); await page.mouse.up();
+  expect(await ids(page)).toEqual(['BBB', 'CCC', 'AAA']); expect(await ids(page, '2026-09-11')).toEqual(['DDD']);
+  expect(await a.evaluate(el => getComputedStyle(el).touchAction)).toBe('none');
+  expect(await page.locator('[data-date="2026-09-10"] .stamp-list').evaluate(el => getComputedStyle(el).touchAction)).toBe('auto');
+});
+
+test('earlier visit asks before moving a stamp; cancellation keeps input and repeat visits keep unique progress', async ({ page }) => {
+  await seed(page); await page.getByRole('button', { name: 'My stamps', exact: true }).click();
+  const row = page.locator('[data-stamp="AAA"]'); await row.locator('summary').click();
+  await row.getByRole('button', { name: 'Add another visit' }).click(); await row.getByLabel('Visit date').fill('2026-09-09'); await row.getByLabel('Notes').fill('Earlier visit');
+  await row.getByRole('button', { name: 'Save check-in' }).click();
+  await expect(page.getByRole('dialog')).toContainText('2026-09-09'); await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+  await expect(row.getByLabel('Notes')).toHaveValue('Earlier visit');
+  await row.getByRole('button', { name: 'Save check-in' }).click(); await page.getByRole('button', { name: 'Save and move stamp' }).click();
+  await expect(row.locator('summary')).toContainText('Stamp 2026-09-09'); await expect(row).toContainText('2 visits'); await expect(page.locator('#overall strong')).toHaveText('4 / 4');
+  page.on('dialog', d => void d.accept());
+  await row.locator('.history article').filter({ hasText: 'Earlier visit' }).getByRole('button', { name: 'Delete' }).click();
+  await expect(row.locator('summary')).toContainText('Stamp 2026-09-10'); await expect(page.locator('.collection-status')).toContainText('Visit deleted');
+});
+
+test('stale ordering draft cannot overwrite another tab and cancelled drafts reveal latest visits', async ({ page, context }) => {
+  await seed(page); await stamps(page); await page.locator('[data-reorder="2026-09-10"]').click();
+  const other = await context.newPage(); await other.goto('/tests/browser/app.html?collection=1');
+  await other.locator('[data-airport="AAA"]').click(); await other.getByLabel('Notes').fill('A concurrent visit'); await other.getByRole('button', { name: 'Save check-in' }).click(); await expect(other.getByRole('button', { name: 'Visit saved', exact: true })).toBeVisible();
+  await page.bringToFront(); await page.locator('[data-save-order]').click();
+  await expect(page.locator('.collection-status')).toContainText('another operation or tab');
+  await expect(page.locator('[data-cancel-order]')).toBeVisible(); await page.locator('[data-cancel-order]').click();
+  await expect(page.locator('[data-stamp="AAA"] summary')).toContainText('2 visits'); await other.close();
+});
+
+test('import reviews earlier dates; cancelling leaves visits untouched', async ({ page }) => {
+  await seed(page); await stamps(page);
+  await page.locator('[data-reorder="2026-09-10"]').click(); await page.locator('[data-save-order]').click();
+  await expect(page.locator('.collection-status')).toContainText('Collection order saved');
+  const backup = { format: 'aviation-passport', schemaVersion: 2, programId: 'independent-core', exportedAt: new Date().toISOString(), attachments: [], checkIns: [{ id: 'earlier-import', programId: 'independent-core', airportId: 'AAA', visitedAt: '2026-09-08', timeKnown: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), notes: 'Imported earlier', verification: { status: 'unverified' } }], orders: [{ date: '2026-09-08', airportIds: ['AAA'], confirmed: true }] };
+  const file = { name: 'earlier.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) };
+  await page.locator('#import').setInputFiles(file);
+  await expect(page.getByRole('dialog')).toContainText('stamp moves');
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.locator('#passport-notice')).toContainText('Import cancelled');
+  expect(await ids(page)).toContain('AAA');
+  await page.locator('#import').setInputFiles(file);
+  await page.getByRole('button', { name: 'Import and keep local order' }).click();
+  await expect(page.locator('#passport-notice')).toContainText('Imported 1 visits');
+  expect(await ids(page, '2026-09-08')).toEqual(['AAA']); expect(await ids(page)).toEqual(['BBB', 'CCC']);
+});
+
+test('failed order save keeps the draft', async ({ page }) => {
+  await seed(page); await stamps(page); await page.locator('[data-reorder="2026-09-10"]').click();
+  await page.locator('[data-handle="AAA"]').press('Space'); await page.locator('[data-handle="AAA"]').press('ArrowDown'); await page.locator('[data-handle="AAA"]').press('Space');
+  await page.evaluate(() => {
+    const app = (window as unknown as { fixtureApp: { store: { saveOrder: () => Promise<void> } } }).fixtureApp;
+    app.store.saveOrder = async () => { throw new Error('Storage full. Your draft is kept.'); };
+  });
+  await page.locator('[data-save-order]').click();
+  await expect(page.locator('.collection-status')).toContainText('Storage full');
+  expect(await ids(page)).toEqual(['BBB', 'AAA', 'CCC']); await expect(page.locator('[data-cancel-order]')).toBeVisible();
+});
+
+test.describe('touch collection', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  test('touch handle reorders while dragging outside the date cancels and the list still scrolls', async ({ page, context }) => {
+    await seed(page); await stamps(page); await page.locator('[data-reorder="2026-09-10"]').tap();
+    const a = page.locator('[data-handle="AAA"]'), c = page.locator('[data-handle="CCC"]');
+    await c.scrollIntoViewIfNeeded();
+    const from = (await a.boundingBox())!, to = (await c.boundingBox())!;
+    const session = await context.newCDPSession(page);
+    const touch = async (type: string, x: number, y: number) => { await session.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 0 }] }); await page.evaluate(() => new Promise<void>(r => requestAnimationFrame(() => r()))); };
+    await touch('touchStart', from.x + 15, from.y + 15);
+    for (let step = 1; step <= 8; step++) await touch('touchMove', from.x + 15, from.y + 15 + (to.y + to.height - from.y - 15) * step / 8);
+    await touch('touchEnd', 0, 0);
+    expect(await ids(page)).toEqual(['BBB', 'CCC', 'AAA']);
+    const pos = (await a.boundingBox())!;
+    await touch('touchStart', pos.x + 15, pos.y + 15); await touch('touchMove', 385, 30); await touch('touchEnd', 0, 0);
+    expect(await ids(page)).toEqual(['BBB', 'CCC', 'AAA']);
+    const scroller = page.locator('.passport-content'); await scroller.evaluate(el => { el.scrollTop = 0; });
+    const before = await scroller.evaluate(el => el.scrollTop);
+    await touch('touchStart', 280, 690); for (let y = 670; y >= 350; y -= 20) await touch('touchMove', 280, y); await touch('touchEnd', 0, 0);
+    await expect.poll(() => scroller.evaluate(el => el.scrollTop)).toBeGreaterThan(before);
+    await session.detach();
+  });
+});
+
+test('Explore confirmation Escape preserves its draft and editing history cannot overwrite it', async ({ page }) => {
+  await seed(page); await page.locator('#explore-tab').click(); await page.locator('[data-airport="AAA"]').click();
+  await page.locator('#checkin [name="date"]').fill('2026-09-09');
+  await page.locator('#checkin [name="notes"]').fill('Unfinished earlier visit');
+  await page.locator('#checkin [type="submit"]').click();
+  await expect(page.getByRole('dialog')).toBeVisible(); await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('#detail')).toBeVisible();
+  await expect(page.locator('#checkin [name="notes"]')).toHaveValue('Unfinished earlier visit');
+  await page.locator('#detail [data-edit]').first().click();
+  await expect(page.locator('#save-status')).toContainText('Save or cancel your current draft');
+  await expect(page.locator('#checkin [name="notes"]')).toHaveValue('Unfinished earlier visit');
+  await page.locator('#cancel-visit-draft').click(); await page.locator('#detail [data-edit]').first().click();
+  await expect(page.locator('#checkin [name="notes"]')).toHaveValue('Original AAA');
+});

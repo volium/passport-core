@@ -33,7 +33,8 @@ export interface CheckIn {
   verification: { status: 'unverified' };
 }
 export interface AirportFilters { query: string; regionId: string; visited: 'all' | 'visited' | 'unvisited' }
+export interface StampOrder { date: string; airportIds: string[]; confirmed: boolean }
 export interface PassportBackup {
-  format: 'aviation-passport'; schemaVersion: 1; programId: string;
+  format: 'aviation-passport'; schemaVersion: 1 | 2; orders?: StampOrder[]; programId: string;
   exportedAt: string; checkIns: CheckIn[]; attachments: never[];
 }

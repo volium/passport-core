@@ -12,3 +12,6 @@ export type { MapEnvironment, OfflineMapStatus, MapState } from './map/offline/m
 export { validateStyleResources } from './map/resources.js';
 
 export type { InstallationGuidance } from './offline-access.js';
+
+export type { StampOrder } from './models.js';
+export type { PassportSnapshot } from './persistence.js';
