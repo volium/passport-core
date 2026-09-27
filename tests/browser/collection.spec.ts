@@ -270,3 +270,34 @@ for (const surface of ['Passport', 'Explore']) test('deleting a stamp visit upda
   await expect(row).toHaveCount(0);
   expect(await ids(page)).toEqual(['BBB', 'CCC']);
 });
+
+
+test('stamp sort modes share saved collection numbers and renumber after deletion', async ({ page }) => {
+  await seed(page); await stamps(page);
+  const sort = page.getByLabel('Sort stamps');
+  await expect(sort.locator('option')).toHaveText(['Airport name', 'Collection order', 'Date']);
+  await page.locator('[data-reorder="2026-09-10"]').click();
+  const handle = page.locator('[data-handle="AAA"]');
+  await handle.press('Space'); await handle.press('ArrowDown'); await handle.press('Space');
+  await page.locator('[data-save-order]').click();
+  await expect(page.locator('.collection-status')).toContainText('Collection order saved');
+  for (const mode of ['name', 'order', 'date']) {
+    await sort.selectOption(mode);
+    await expect(page.locator('[data-stamp="BBB"] .collection-number')).toHaveText('#1');
+    await expect(page.locator('[data-stamp="AAA"] .collection-number')).toHaveText('#2');
+    await expect(page.locator('[data-stamp="DDD"] .collection-number')).toHaveText('#4');
+    if (mode === 'order') {
+      expect(await page.locator('[data-stamp]').evaluateAll(rows => rows.map(r => r.getAttribute('data-stamp')))).toEqual(['BBB', 'AAA', 'CCC', 'DDD']);
+      await expect(page.locator('[data-date]')).toHaveCount(0);
+    }
+    if (mode === 'date') await expect(page.locator('[data-date]')).toHaveCount(2);
+  }
+  await sort.selectOption('order');
+  const row = page.locator('[data-stamp="BBB"]'); await row.locator('summary').click();
+  await row.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete visit', exact: true }).click();
+  await expect(page.locator('[data-stamp="AAA"] .collection-number')).toHaveText('#1');
+  await expect(page.locator('[data-stamp="DDD"] .collection-number')).toHaveText('#3');
+  await page.reload(); await page.locator('#passport-tab').click(); await stamps(page);
+  await expect(page.locator('[data-stamp="AAA"] .collection-number')).toHaveText('#1');
+});

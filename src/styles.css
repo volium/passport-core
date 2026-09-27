@@ -235,3 +235,5 @@ progress::-moz-progress-bar { background: var(--region, #438262); }
 
 .stamp > small { display: block; margin: 6px 0; }
 .stamp-instructions > summary { cursor: pointer; min-height: 44px; align-content: center; font-weight: 600; }
+
+.collection-row summary .collection-number { display: inline-block; margin: 0 6px 0 0; color: var(--muted); font-size: .85em; font-variant-numeric: tabular-nums; }

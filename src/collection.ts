@@ -42,3 +42,11 @@ export function validateOrders(value: unknown, visits: CheckIn[]): value is Stam
   }
   return seenIds.size === dates.size;
 }
+
+/** Display positions derive from persisted dates and same-day order, never visit creation time. */
+export function collectionSequence(visits: CheckIn[], orders: StampOrder[]) {
+  let number = 0;
+  return reconcileOrders(visits, visits, orders).flatMap(order =>
+    order.airportIds.map(airportId => ({ airportId, date: order.date, number: ++number,
+      provisional: order.airportIds.length > 1 && !order.confirmed })));
+}

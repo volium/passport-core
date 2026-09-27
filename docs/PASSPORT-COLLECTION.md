@@ -18,7 +18,7 @@ Keep regional cards prominent; this supersedes the earlier proposal to lead with
 
 ## My stamps view and sorting
 
-List each collected airport once, with identifier/name, region, collection date, and repeat-visit count. Offer Airport name (alphabetical) and Collection order. Collection order is chronological by collection date, oldest first, with a separate group per calendar date. Same-day ordering represents the sequence of stamp collection, not multiple completion credits. Region browsing already lives in the regional view; it need not be duplicated as another flat-list grouping control.
+List each collected airport once, with identifier/name, region, collection date, and repeat-visit count. Offer Airport name (alphabetical), Collection order (one continuous chronological list, oldest first), and Date (a separate group per calendar date with same-day reordering). All three views show the same collection number for each collected airport, derived from collection dates and saved same-day ordering. Numbers are positions, not permanent IDs: earlier additions, date changes, deletions, imports, and saved reordering recalculate them. Repeat visits do not add a number; visit-only airports remain unnumbered. Unconfirmed same-day ordering is labeled in every view. No extra persisted rank or storage/backup migration is needed. Same-day ordering represents the sequence of stamp collection, not multiple completion credits. Region browsing already lives in the regional view; it need not be duplicated as another flat-list grouping control.
 
 The no-visits state explains that collected stamps will appear after the first visit and offers Explore airports. Regional view still shows all regions and unvisited airports. Keep recorded history when an airport stops participating; exclude it from current completion as configured, but keep it accessible in My stamps with a clear participation label. Records missing current metadata remain accessible in My stamps under their stable airport ID with an explanation. Nonparticipating or missing airports have no Show on map action, and do not add completion credit.
 
@@ -83,7 +83,7 @@ Before testing a storage upgrade, keep a JSON export of existing visits. An olde
 
 1. Open My passport, expand multiple regions, and check visited/unvisited rows. Explore filters must not reduce this list.
 2. Add and edit visits within a row. Switch views/tabs while writing notes and verify the draft remains. Test repeat visits and an earlier historical visit, including cancelling its confirmation.
-3. Open My stamps and switch between Airport name and Collection order. Enter Reorder on a date with several airports; drag only by a handle within that date. Check Save order, Cancel, an invalid drop, normal scrolling outside handles, and keyboard Space/arrows/Escape.
+3. Open My stamps and switch between Airport name, Collection order, and Date. Verify consistent collection numbers in all three views. In Date, enter Reorder on a date with several airports; drag only by a handle within that date. Check Save order, Cancel, an invalid drop, normal scrolling outside handles, and keyboard Space/arrows/Escape.
 4. Reload and confirm the saved order remains. Export/import it and confirm v3 ordering and visit-only flags survive; import an older backup and confirm existing explicit order is preserved.
 5. Check desktop and physical mobile layouts, touch dragging, light/dark appearance, focus and screen-reader announcements. Test without a basemap. Report any friction before committing this implementation.
 

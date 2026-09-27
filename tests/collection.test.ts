@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { openDB } from 'idb';
 import { describe, expect, it } from 'vitest';
 import { PassportStore } from '../src/persistence.js';
-import { collectionDates, collectionChanges, reconcileOrders, validateOrders, visitStampLabel } from '../src/collection.js';
+import { collectionSequence, collectionDates, collectionChanges, reconcileOrders, validateOrders, visitStampLabel } from '../src/collection.js';
 import { validateBackup } from '../src/domain.js';
 import type { CheckIn, PassportProgram } from '../src/models.js';
 
@@ -135,4 +135,31 @@ it('history labels follow the current stamp date without rewriting visit eligibi
   expect(visitStampLabel({ ...original, historyOnly: true }, '2026-09-10')).toBe('Visit only - excluded from stamp collection');
   expect(visitStampLabel(original, undefined)).toBe('Repeat visit');
   expect(original.historyOnly).toBeUndefined();
+});
+
+
+describe('collection numbers', () => {
+  it('renumbers after earlier stamps, date edits, deletion, and reorder without counting repeat/history-only visits', async () => {
+    const id = program(), store = new PassportStore(id);
+    const positions = async () => { const s = await store.snapshot(); return collectionSequence(s.visits, s.orders).map(v => [v.airportId, v.number]); };
+    await store.save(visit(id, 'A')); await store.save(visit(id, 'B'));
+    await store.saveOrder({ date: '2026-09-10', airportIds: ['B', 'A'], confirmed: true }, (await store.snapshot()).revision);
+    expect(await positions()).toEqual([['B', 1], ['A', 2]]);
+    await store.save(visit(id, 'C', '2026-09-09'));
+    expect(await positions()).toEqual([['C', 1], ['B', 2], ['A', 3]]);
+    await store.save(visit(id, 'A', '2026-09-12', 'repeat'));
+    await store.save({ ...visit(id, 'D', '2026-09-08'), historyOnly: true });
+    expect(await positions()).toEqual([['C', 1], ['B', 2], ['A', 3]]);
+    await store.save(visit(id, 'C', '2026-09-11'));
+    expect(await positions()).toEqual([['B', 1], ['A', 2], ['C', 3]]);
+    await store.delete('B');
+    expect(await positions()).toEqual([['A', 1], ['C', 2]]);
+    await store.close(); const reopened = new PassportStore(id), state = await reopened.snapshot();
+    expect(collectionSequence(state.visits, state.orders).map(v => [v.airportId, v.number])).toEqual([['A', 1], ['C', 2]]);
+    await reopened.close();
+  });
+  it('marks legacy same-day order provisional without inventing visit times', () => {
+    const visits = [visit('p', 'B'), visit('p', 'A'), visit('p', 'C', '2026-09-11')];
+    expect(collectionSequence(visits, []).map(v => [v.airportId, v.number, v.provisional])).toEqual([['A', 1, true], ['B', 2, true], ['C', 3, false]]);
+  });
 });
