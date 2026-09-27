@@ -108,6 +108,8 @@ test('missing secure-context map APIs explain the limitation and leave passport 
 
 test('wheel zoom works over airport markers in both directions', async ({ page }) => {
   await page.goto('/tests/browser/app.html');
+  // Markers render during mount; the fixture is exposed only after mount resolves.
+  await expect.poll(() => page.evaluate(() => Boolean((window as unknown as { fixtureApp?: { map?: { map?: unknown } } }).fixtureApp?.map?.map))).toBe(true);
   const marker = page.locator('.airport-map-hit').first();
   await expect(marker).toBeVisible();
   const zoom = () => page.evaluate(() => (window as unknown as { fixtureApp: { map: { map: import('maplibre-gl').Map } } }).fixtureApp.map.map.getZoom());
