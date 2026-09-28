@@ -1,3 +1,4 @@
+import { mapIcon, protectionIcon } from './header-icons.js';
 import type { OfflineMapManager, OfflineMapStatus } from './map/offline/manager.js';
 
 export interface InstallationGuidance {
@@ -6,14 +7,14 @@ export interface InstallationGuidance {
 }
 export const standalone = () => matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 const share = '<svg class="share-icon" viewBox="0 0 24 28" aria-hidden="true"><path d="M5 11H3v14h18V11h-2M12 18V2m-5 5 5-5 5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-export const offlineNavigation = `<div class="offline-navigation"><button id="offline-access" type="button" aria-controls="offline-card" aria-expanded="false"><span><strong>Offline access</strong> · <span id="offline-summary">Checking map</span></span><progress id="offline-progress" aria-label="Map download" hidden></progress></button><button id="storage-protection" type="button" aria-label="Storage protection: Unknown" aria-controls="protection-details" hidden><svg viewBox="0 0 20 24" aria-hidden="true"><path d="M10 2 18 5v7c0 5-8 10-8 10S2 17 2 12V5Z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button><span id="offline-announcement" class="sr-only" role="status" aria-live="polite"></span></div>`;
+export const offlineNavigation = `<div class="offline-navigation"><button id="offline-access" type="button" aria-controls="offline-card" aria-expanded="false">${mapIcon}<span class="sr-only"><strong>Offline access</strong> · <span id="offline-summary">Checking map</span></span><span class="header-offline-label">Checking map</span><progress id="offline-progress" aria-label="Map download" hidden></progress></button><button id="storage-protection" type="button" aria-label="Storage protection: Unknown" aria-controls="protection-details" hidden>${protectionIcon}</button><span id="offline-announcement" class="sr-only" role="status" aria-live="polite"></span></div>`;
 export const offlineCard = `<section id="offline-card" class="offline-card" role="dialog" aria-labelledby="offline-heading" hidden>
   <header class="offline-card-heading"><h2 id="offline-heading" tabindex="-1">Offline access</h2><button id="offline-close" type="button">Close</button></header>
   <p class="offline-muted">Check your map and passport before travel.</p>
   <section id="offline-setup" class="offline-box offline-setup"><h3>Take your passport with you</h3><p id="installation-intro"></p><p id="installation-storage"></p><details class="offline-disclosure"><summary>Home Screen setup</summary><ol id="installation-steps"></ol><p>Keep the app open while your map downloads. Mobile data may be used.</p></details></section>
   <section class="offline-box"><h3 id="map-name"></h3><p id="map-size" class="offline-muted"></p><p id="map-status"></p><progress id="map-progress" aria-label="Map download" hidden></progress><p id="map-transfer-note">Includes map details, labels, and supporting files. Keep the app open; mobile data may be used.</p><p id="map-renderer-status" role="status" hidden></p><div class="backup-actions"><button id="map-download" type="button">Download map</button><button id="map-cancel" type="button" hidden>Cancel download</button><button id="map-retry" type="button" hidden>Try map again</button></div><details id="map-repair" class="offline-disclosure" hidden><summary>Repair options</summary><p>A replacement downloads the complete map again. Your visits stay unchanged; a working saved map is retained until its replacement is verified.</p><div class="backup-actions"><button id="map-replace" type="button">Download replacement</button><button id="map-rollback" type="button" hidden>Restore previous map</button></div></details></section>
   <div class="offline-row" id="offline-shell">Open app offline: not verified.</div><div class="offline-row">Airport information: loaded.</div><div class="offline-row" id="offline-visits">Passport storage: checking.</div>
-  <details id="protection-details" class="offline-disclosure" hidden><summary id="protection-heading">Storage protection</summary><p id="protection-description"></p><div class="export-action"><button id="offline-export" type="button" aria-describedby="offline-export-status">Export passport</button><p id="offline-export-status" class="export-feedback" role="status" aria-live="polite"></p></div></details><p class="offline-muted">Visits are saved in this browser/app. Export a backup to transfer them. Maps are downloaded separately.</p>
+  <details id="protection-details" class="offline-disclosure" hidden><summary id="protection-heading">Storage protection${protectionIcon}</summary><p id="protection-description"></p><div class="export-action"><button id="offline-export" type="button" aria-describedby="offline-export-status">Export passport</button><p id="offline-export-status" class="export-feedback" role="status" aria-live="polite"></p></div></details><p class="offline-muted">Visits are saved in this browser/app. Export a backup to transfer them. Maps are downloaded separately.</p>
 </section>`;
 
 /** Reusable presentation/orchestration; no program-specific assets or browser installation logic. */
@@ -81,7 +82,10 @@ export class OfflineAccess {
     this.el<HTMLDetailsElement>('#protection-details').open = protection;
     const heading = this.el(protection ? '#protection-heading' : '#offline-heading');
     heading.focus({preventScroll:true});
-    if (protection) heading.scrollIntoView({block:'nearest'}); else card.scrollTop = 0;
+    if (protection) {
+      const sticky = this.el('.offline-card-heading');
+      card.scrollTop += heading.getBoundingClientRect().top - sticky.getBoundingClientRect().bottom - 12;
+    } else card.scrollTop = 0;
   }
   close() {
     this.el('#offline-card').hidden = true;
@@ -114,6 +118,13 @@ export class OfflineAccess {
     const labels: Record<OfflineMapStatus['state'],string> = {checking:'Checking map',downloading:`Map download ${percent}%`,verifying:'Download complete - verifying map',installed:'Map available offline','not-downloaded':'Map not downloaded',waiting:'Waiting for connection',cancelled:'Download cancelled',failed:'Map needs attention','integrity-failed':'Map verification failed','insufficient-storage':'Not enough storage',missing:'Saved map is missing or unreadable'};
     const summary = !busy && status.active ? this.rendererError ? 'Saved map needs attention' : status.updateAvailable ? 'Map available offline · update available' : 'Map available offline' : labels[status.state];
     this.el('#offline-summary').textContent = summary;
+    const access = this.el('#offline-access');
+    const short = summary === 'Map available offline' ? 'Offline ready' : summary === 'Map not downloaded' ? 'Download map' : transfer ? 'Map ' + percent + '%' : status.state === 'verifying' ? 'Verifying map' : /attention|failed|missing/.test(summary) ? 'Check map' : summary;
+    this.el('.header-offline-label').textContent = short;
+    access.title = 'Offline access: ' + summary;
+    access.setAttribute('aria-label', access.title);
+    access.dataset.ready = String(summary === 'Map available offline');
+    access.dataset.transfer = String(transfer);
     if (this.announcedState !== status.state) {
       this.announcedState = status.state;
       this.el('#offline-announcement').textContent = status.state === 'downloading' ? 'Map download started.' : labels[status.state];

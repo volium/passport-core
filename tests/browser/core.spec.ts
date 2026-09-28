@@ -408,11 +408,40 @@ for (const custom of [false, true]) test('theme accents respect appearance, syst
   await expect.poll(colors).toEqual(light);
   const darkBrand = {background:'rgb(48, 48, 53)',text:dark.background};
   await page.emulateMedia({colorScheme:'dark'}); await expect.poll(colors).toEqual(darkBrand);
-  await page.getByLabel('Appearance').selectOption('light'); await expect.poll(colors).toEqual(light);
-  await page.emulateMedia({colorScheme:'light'}); await page.getByLabel('Appearance').selectOption('dark');
+  await page.getByRole('button', {name:'Switch to light appearance',exact:true}).click(); await expect.poll(colors).toEqual(light);
+  await page.emulateMedia({colorScheme:'light'}); await page.getByRole('button', {name:'Switch to dark appearance',exact:true}).click();
   await expect.poll(colors).toEqual(darkBrand);
   await page.locator('#offline-access').click();
   await expect(page.locator('#map-download')).toHaveCSS('background-color',dark.background);
   await expect(page.locator('#map-download')).toHaveCSS('color',dark.text);
-  await page.reload(); await expect(page.getByLabel('Appearance')).toHaveValue('dark'); await expect.poll(colors).toEqual(darkBrand);
+  await page.reload(); await expect(page.getByRole('button', {name:'Switch to light appearance',exact:true})).toBeVisible(); await expect.poll(colors).toEqual(darkBrand);
+});
+
+for (const width of [1280,390,320]) test('production header reclaims space and opens protection at ' + width, async ({ page }) => {
+  await page.setViewportSize({width,height:844});
+  await page.goto('/tests/browser/app.html');
+  await expect(page.locator('#app')).toHaveAttribute('aria-busy','false');
+  await expect(page.locator('.app-header #offline-access')).toBeVisible();
+  await expect(page.locator('#theme')).toHaveCount(0);
+  const toggle = page.locator('#appearance-trigger');
+  await expect(toggle).toHaveAttribute('title', 'Switch to dark appearance');
+  await toggle.press('Space');
+  await expect(toggle).toHaveAttribute('title','Switch to light appearance');
+  await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  const bounds = await page.locator('.workspace').boundingBox();
+  expect(Math.abs(bounds!.y+bounds!.height-844)).toBeLessThan(2);
+  await page.locator('#storage-protection').click();
+  await expect(page.locator('#protection-details')).toHaveAttribute('open','');
+  await expect(page.locator('#protection-heading svg')).toHaveCount(1);
+  expect(await page.locator('#protection-heading').evaluate(el=>{
+    const r=el.getBoundingClientRect(), header=document.querySelector('.offline-card-heading')!.getBoundingClientRect(), card=document.querySelector('#offline-card')!.getBoundingClientRect();
+    return r.top>=header.bottom && r.bottom<=card.bottom && el.lastElementChild?.tagName.toLowerCase()==='svg';
+  })).toBe(true);
+  await page.locator('#offline-close').click();
+  await expect(page.locator('#storage-protection')).toBeFocused();
+  await page.locator('#offline-access').click();
+  await expect(page.locator('#protection-details')).not.toHaveAttribute('open','');
+  await page.locator('#map-download').click();
+  await expect(page.locator('.header-offline-label')).toHaveText('Offline ready');
 });

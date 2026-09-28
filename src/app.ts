@@ -1,3 +1,4 @@
+import { appearanceButton } from './header-icons.js';
 import { PassportCollection } from './passport-collection.js';
 import { collectionDates, collectionChanges, reconcileOrders, visitStampLabel } from './collection.js';
 import { confirmCollection, chooseEarlierVisit } from './visit-ui.js';
@@ -61,7 +62,7 @@ export class PassportApp {
     this.root.innerHTML = `
       <a class="skip-link" href="#airport-list">Skip to airports</a>
       <header class="app-header"><div class="brand"><span class="brand-icon" aria-hidden="true">✈</span><div><span class="eyebrow">${escape(p.branding.eyebrow)}</span><h1>${escape(p.shortName)}</h1></div></div>
-      <div id="overall" class="overall"></div><div class="header-actions"><label class="theme-label">Appearance<select id="theme" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div></header>${offlineNavigation}
+      <div id="overall" class="overall"></div><div class="header-actions">${appearanceButton}${offlineNavigation}</div></header>
       <div class="workspace" data-view="map" data-section="explore"><aside class="sidebar" aria-label="Passport navigation and airport explorer">
       <div class="primary-tabs" role="tablist" aria-label="Main view"><button id="explore-tab" role="tab" type="button" aria-selected="true" aria-controls="explore-panel">Explore</button><button id="passport-tab" role="tab" type="button" aria-selected="false" aria-controls="passport-panel" tabindex="-1">My passport</button></div>
       <p id="notice" role="status" aria-live="polite"></p>
@@ -235,12 +236,15 @@ export class PassportApp {
   }
 
   private setupTheme() {
-    const select = this.el<HTMLSelectElement>('#theme');
-    try { select.value = localStorage.getItem(`passport:${this.program.id}:theme`) ?? localStorage.getItem('passport:theme') ?? 'system'; } catch { /* Preference storage is optional. */ }
-    if (!select.value) select.value = 'system';
+    const button = this.el<HTMLButtonElement>('#appearance-trigger');
+    let preference = 'system';
+    try { preference = localStorage.getItem(`passport:${this.program.id}:theme`) ?? localStorage.getItem('passport:theme') ?? 'system'; } catch { /* Preference storage is optional. */ }
+    if (!['system','light','dark'].includes(preference)) preference = 'system';
     const media = matchMedia('(prefers-color-scheme: dark)');
     const apply = () => {
-      const theme = select.value === 'system' ? (media.matches ? 'dark' : 'light') : select.value === 'dark' ? 'dark' : 'light';
+      const theme = preference === 'system' ? (media.matches ? 'dark' : 'light') : preference === 'dark' ? 'dark' : 'light';
+      button.title = theme === 'dark' ? 'Switch to light appearance' : 'Switch to dark appearance';
+      button.setAttribute('aria-label', button.title);
       document.documentElement.dataset.theme = theme;
       const colors = this.program.branding.themes?.[theme];
       const accent = colors?.accent ?? (theme === 'light' ? this.program.branding.accent : undefined);
@@ -250,7 +254,11 @@ export class PassportApp {
     };
     apply();
     media.addEventListener('change', apply, { signal: this.events.signal });
-    select.addEventListener('change', () => { apply(); try { localStorage.setItem(`passport:${this.program.id}:theme`, select.value); } catch { /* Still usable this session. */ } });
+    button.addEventListener('click', () => {
+      preference = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      apply();
+      try { localStorage.setItem(`passport:${this.program.id}:theme`, preference); } catch { /* Still usable this session. */ }
+    }, { signal: this.events.signal });
   }
 
   private setupOfflineMap() {
