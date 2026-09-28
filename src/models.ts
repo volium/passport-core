@@ -21,7 +21,7 @@ export interface AirportDefinition {
 export interface PassportProgram {
   id: string; name: string; shortName: string; description: string;
   dataNotice: string;
-  branding: { accent: string; eyebrow: string };
+  branding: { accent: string; eyebrow: string; themes?: Partial<Record<'light' | 'dark', { accent: string; onAccent: string }>> };
   map: { center: Coordinates; zoom: number; package: OfflineMapPackage; markerDetailZoom?: number };
   regions: RegionDefinition[]; airports: AirportDefinition[];
 }

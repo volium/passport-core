@@ -58,7 +58,6 @@ export class PassportApp {
     this.root.setAttribute('aria-busy','true');
     this.root.classList.add('passport-app');
     const p = this.program;
-    this.root.style.setProperty('--accent', p.branding.accent);
     this.root.innerHTML = `
       <a class="skip-link" href="#airport-list">Skip to airports</a>
       <header class="app-header"><div class="brand"><span class="brand-icon" aria-hidden="true">✈</span><div><span class="eyebrow">${escape(p.branding.eyebrow)}</span><h1>${escape(p.shortName)}</h1></div></div>
@@ -240,7 +239,15 @@ export class PassportApp {
     try { select.value = localStorage.getItem(`passport:${this.program.id}:theme`) ?? localStorage.getItem('passport:theme') ?? 'system'; } catch { /* Preference storage is optional. */ }
     if (!select.value) select.value = 'system';
     const media = matchMedia('(prefers-color-scheme: dark)');
-    const apply = () => { document.documentElement.dataset.theme = select.value === 'system' ? (media.matches ? 'dark' : 'light') : select.value; this.updateBasemap(); };
+    const apply = () => {
+      const theme = select.value === 'system' ? (media.matches ? 'dark' : 'light') : select.value === 'dark' ? 'dark' : 'light';
+      document.documentElement.dataset.theme = theme;
+      const colors = this.program.branding.themes?.[theme];
+      const accent = colors?.accent ?? (theme === 'light' ? this.program.branding.accent : undefined);
+      if (accent) this.root.style.setProperty('--accent', accent); else this.root.style.removeProperty('--accent');
+      if (colors) this.root.style.setProperty('--on-accent', colors.onAccent); else this.root.style.removeProperty('--on-accent');
+      this.updateBasemap();
+    };
     apply();
     media.addEventListener('change', apply, { signal: this.events.signal });
     select.addEventListener('change', () => { apply(); try { localStorage.setItem(`passport:${this.program.id}:theme`, select.value); } catch { /* Still usable this session. */ } });

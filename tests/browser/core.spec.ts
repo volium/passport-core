@@ -397,3 +397,22 @@ test('failed visit save keeps the editor and its draft open', async ({ page }) =
   await expect(page.locator('#checkin [name="notes"]')).toHaveValue('Keep this after failure');
   await expect(page.locator('#visit-save-confirmation')).toBeEmpty();
 });
+
+for (const custom of [false, true]) test('theme accents respect appearance, system changes and reload: ' + custom, async ({ page }) => {
+  await page.emulateMedia({colorScheme:'light'});
+  await page.goto('/tests/browser/app.html' + (custom ? '?theme-colors=1' : ''));
+  await expect(page.locator('#app')).toHaveAttribute('aria-busy','false');
+  const colors = () => page.locator('.brand-icon').evaluate(el => ({background:getComputedStyle(el).backgroundColor, text:getComputedStyle(el).color}));
+  const light = {background:custom ? 'rgb(48, 79, 128)' : 'rgb(37, 107, 83)',text:'rgb(255, 255, 255)'};
+  const dark = {background:custom ? 'rgb(172, 203, 250)' : 'rgb(118, 179, 151)',text:custom ? 'rgb(25, 36, 54)' : 'rgb(21, 39, 31)'};
+  await expect.poll(colors).toEqual(light);
+  const darkBrand = {background:'rgb(48, 48, 53)',text:dark.background};
+  await page.emulateMedia({colorScheme:'dark'}); await expect.poll(colors).toEqual(darkBrand);
+  await page.getByLabel('Appearance').selectOption('light'); await expect.poll(colors).toEqual(light);
+  await page.emulateMedia({colorScheme:'light'}); await page.getByLabel('Appearance').selectOption('dark');
+  await expect.poll(colors).toEqual(darkBrand);
+  await page.locator('#offline-access').click();
+  await expect(page.locator('#map-download')).toHaveCSS('background-color',dark.background);
+  await expect(page.locator('#map-download')).toHaveCSS('color',dark.text);
+  await page.reload(); await expect(page.getByLabel('Appearance')).toHaveValue('dark'); await expect.poll(colors).toEqual(darkBrand);
+});
