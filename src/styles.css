@@ -6,7 +6,7 @@
 body { margin: 0; }
 .passport-app { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100vh; height: 100dvh; overflow: hidden; }
 button, input, select, textarea { font: inherit; }
-button, .button { cursor: pointer; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); padding: 10px 14px; min-height: 44px; }
+button, .button { font-size:14px; font-weight:600; line-height:1.4; cursor: pointer; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); padding: 10px 14px; min-height: 44px; }
 button:hover, .button:hover { background: var(--soft); }
 button:disabled { opacity: .6; cursor: wait; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
@@ -79,7 +79,7 @@ progress::-moz-progress-bar { background: var(--region, var(--accent)); }
 .region-dot { width: 14px; height: 14px; flex: 0 0 14px; background: var(--region); border: 1px solid var(--border); border-radius: 50%; }
 .data-notice { color: var(--muted); font-size: 12px; }
 .backup-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
-.backup-actions > button, .backup-actions > .button { display: inline-flex; align-items: center; justify-content: center; flex: 1 1 130px; font: inherit; font-size: 14px; line-height: 1.4; text-align: center; }
+.backup-actions > button, .backup-actions > .button { display: inline-flex; align-items: center; justify-content: center; flex: 1 1 130px; font-size: 14px; line-height: 1.4; text-align: center; }
 .button:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 #notice { flex-shrink: 0; max-height: 100px; overflow-y: auto; font-size: 12px; }
 #notice:not(:empty) { margin: 10px 18px; padding: 10px 12px; background: var(--soft); border: 1px solid var(--border); border-radius: 8px; }
@@ -97,7 +97,7 @@ progress::-moz-progress-bar { background: var(--region, var(--accent)); }
 .stamp p { margin: 6px 0; }
 .stamp small, .muted { color: var(--muted); font-size: 12px; }
 .detail form label { margin: 12px 0; }
-.primary { background: var(--accent); color: var(--on-accent); border: 0; width: 100%; margin-top: 14px; }
+.primary { background: var(--accent); color: var(--on-accent); border: 1px solid transparent; width: 100%; margin-top: 14px; }
 .primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--on-accent)); }
 .primary.is-saved:disabled { opacity: 1; cursor: default; background: var(--success-surface); color: var(--success-text); }
 .deleted-visit button:disabled { opacity: 1; cursor: default; background: var(--soft); color: var(--muted); }
@@ -152,8 +152,11 @@ progress::-moz-progress-bar { background: var(--region, var(--accent)); }
 #offline-access { display:grid; gap:5px; flex:1; max-width:460px; }
 #storage-protection { margin-left:auto; color:var(--muted); }
 #storage-protection svg { width:16px; height:19px; vertical-align:middle; }
-.offline-card { position:absolute; top:150px; left:50%; transform:translateX(-50%); z-index:1050; width:min(480px,calc(100% - 32px)); max-height:calc(100% - 166px); overflow:auto; overscroll-behavior:contain; border:1px solid var(--border); border-radius:14px; background:var(--surface); color:var(--text); padding:20px; box-shadow:0 12px 48px #0003; }
-.offline-card-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; position:sticky; top:-20px; z-index:1; background:var(--surface); padding:8px 0; }
+.offline-card { position:fixed; inset:0; margin:auto; width:min(480px,calc(100% - 32px)); max-height:calc(100dvh - 32px); overflow:hidden; border:1px solid var(--border); border-radius:14px; background:var(--surface); color:var(--text); padding:0; box-shadow:0 12px 48px #0003; }
+.offline-card[open] { display:flex; flex-direction:column; }
+.offline-card-content { min-height:0; overflow:auto; overscroll-behavior:contain; padding:0 20px 20px; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
+.offline-card::backdrop { background:#0007; }
+.offline-card-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-shrink:0; background:var(--surface); padding:20px 20px 12px; }
 .offline-card-heading h2 { font-size:20px; }
 .offline-card p,.offline-card li { font-size:13px; line-height:1.6; }
 .offline-card p { margin:8px 0; }
@@ -166,7 +169,7 @@ progress::-moz-progress-bar { background: var(--region, var(--accent)); }
 .offline-row { padding:12px 0; font-size:13px; border-bottom:1px solid var(--border); }
 .share-icon { display:inline-block; width:16px; height:19px; vertical-align:middle; margin:0 4px; }
 .offline-navigation progress,.offline-card progress { width:100%; height:4px; border:0; border-radius:8px; overflow:hidden; accent-color:var(--accent); }
-@media(max-width:760px) { .offline-navigation { padding:4px 8px 8px; } .offline-card { padding:16px; } .offline-card-heading { top:-16px; } }
+@media(max-width:760px) { .offline-navigation { padding:4px 8px 8px; } .offline-card-content { padding:0 16px 16px; } .offline-card-heading { padding:16px 16px 12px; } }
 
 #map-download, #map-replace { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
 #map-download:hover, #map-replace:hover, #preview-details:hover { background:color-mix(in srgb, var(--accent) 88%, var(--on-accent)); }
@@ -292,3 +295,40 @@ progress::-moz-progress-bar { background: var(--region, var(--accent)); }
 .app-header .appearance-icon-tile { display:grid; place-items:center; width:32px; height:32px; border-radius:8px; background:var(--surface); border:1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); color:var(--accent); }
 .app-header .appearance-icon-tile svg { width:18px; height:18px; }
 .app-header #appearance-trigger:hover .appearance-icon-tile { background:var(--soft); border-color:var(--accent); }
+
+.checkin-nav { display:flex; align-items:center; flex-shrink:0; gap:4px; padding-right:10px; border-bottom:1px solid var(--border); background:var(--surface); }
+.checkin-nav .primary-tabs { flex:1; min-width:0; border-bottom:0; padding:10px 4px 10px 8px; }
+.checkin-nav .primary-tabs button { padding:10px 8px; white-space:nowrap; }
+.checkin-action { display:flex; align-items:center; justify-content:center; gap:5px; padding:10px; white-space:nowrap; color:var(--on-accent); background:var(--accent); border-color:transparent; font-weight:600; }
+.checkin-action svg, .gps-checkin svg { width:19px; height:19px; flex-shrink:0; }
+.gps-checkin { width:calc(100% - 28px); max-width:420px; max-height:calc(100dvh - 32px); margin:auto; padding:22px; border:1px solid var(--border); border-radius:18px; background:var(--surface); color:var(--text); box-shadow:var(--shadow); overflow:auto; }
+.gps-checkin::backdrop { background:#0007; }
+.gps-checkin header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.gps-checkin h2 { margin:5px 0 0; font-size:22px; }
+.gps-checkin h2:focus { outline:none; }
+.gps-kicker { color:var(--accent); font-size:10px; font-weight:700; letter-spacing:1.5px; }
+.gps-disclaimer { color:var(--muted); font-size:12px; line-height:1.5; border-bottom:1px solid var(--border); padding-bottom:16px; margin:16px 0; }
+.gps-content p { line-height:1.6; }
+.gps-muted { color:var(--muted); font-size:13px; }
+.gps-symbol { display:grid; place-items:center; width:48px; height:48px; border-radius:14px; background:var(--soft); color:var(--accent); margin-top:20px; }
+.gps-checkin .gps-symbol svg { width:26px; height:26px; }
+.gps-checkin .gps-primary { margin-top:18px; }
+.gps-checkin .gps-secondary { width:100%; margin-top:12px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px; }
+.gps-checkin .gps-secondary:hover { background:var(--soft); border-color:var(--accent); }
+.gps-checkin .gps-secondary:active { background:var(--soft); }
+
+.gps-airport { padding:18px; margin:16px 0; background:var(--soft); border:1px solid var(--border); border-radius:12px; }
+.gps-checkin h3 { font-size:19px; margin:0; }
+.gps-airport p { margin:6px 0; }
+.gps-distance { display:flex; align-items:center; gap:6px; color:var(--accent); font-size:14px; }
+.gps-checkin textarea { margin-top:8px; resize:vertical; }
+@media(max-width:350px) { .checkin-nav { padding-right:6px; gap:0; } .checkin-nav button { font-size:12px; } }
+
+.gps-results { display:grid; gap:10px; max-height:45dvh; overflow:auto; margin:16px 0; }
+.gps-airport { display:flex; flex-direction:column; gap:6px; text-align:left; width:100%; }
+.gps-airport strong { font-size:18px; }
+.gps-airport span { display:block; }
+.gps-checkin label { display:block; margin-top:14px; }
+.gps-checkin input[type=date] { min-width:0; max-width:100%; box-sizing:border-box; }
+
+.checkin-nav:not(:has(#quick-checkin)) .primary-tabs { padding:10px 12px; }

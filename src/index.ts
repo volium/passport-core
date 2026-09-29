@@ -15,3 +15,5 @@ export type { InstallationGuidance } from './offline-access.js';
 
 export type { StampOrder } from './models.js';
 export type { PassportSnapshot } from './persistence.js';
+
+export type { LocationPolicy, LocationEvidence } from './models.js';

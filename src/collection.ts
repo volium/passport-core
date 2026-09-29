@@ -18,7 +18,15 @@ export function reconcileOrders(before: CheckIn[], after: CheckIn[], orders: Sta
     const members = [...dates.keys()].filter(id => dates.get(id) === date);
     const existing = orders.find(o => o.date === date);
     const kept = (existing?.airportIds ?? []).filter(id => dates.get(id) === date && oldDates.get(id) === date);
+    const time = (id: string) => {
+      const visits = after.filter(v => v.airportId === id && !v.historyOnly && v.visitedAt === date);
+      return visits.length && visits.every(v => v.timeKnown && v.capturedAt) ? visits.map(v => v.capturedAt!).sort()[0] : undefined;
+    };
     const added = members.filter(id => !kept.includes(id)).sort();
+    // Existing explicit order always wins. Fully timed, unconfirmed days can follow capture time.
+    if (!existing?.confirmed && members.every(id => !!time(id)) && kept.every((id, index) => !index || time(kept[index - 1])! <= time(id)!)) {
+      return { date, airportIds: members.sort((a,b) => time(a)!.localeCompare(time(b)!) || a.localeCompare(b)), confirmed:false };
+    }
     return { date, airportIds: [...kept, ...added], confirmed: !!existing?.confirmed && !added.length };
   });
 }

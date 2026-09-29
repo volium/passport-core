@@ -106,3 +106,8 @@ Core supplies neutral light and layered Graphite Green dark surfaces and semanti
 ## Compact header (0.7.7)
 
 Core renders appearance, offline map status and storage protection in the header. The half-light/half-dark button uses a 32px visual tile within a 44px touch target. New users follow the system appearance; existing preferences are honored, and toggles save an explicit light/dark choice. Tooltips describe the next action only. Offline status remains descriptive for assistive technology; desktop shows short labels and mobile retains download percentages. Opening the protection shield expands and scrolls to Storage protection, with its matching shield after the label. Closing the card restores focus. Programs need no preview flags or DOM adapters.
+
+
+## Location-assisted check-in (0.8.0)
+
+Airport-proximity check-in, date/time evidence, manual fallback and backup/database v4 are implemented. See [GPS check-in](docs/GPS-CHECK-IN.md) for policy, migration, editing, ordering and physical-device acceptance. This supersedes the earlier future-GPS notes. Existing manual visits remain date-only. No continuous tracking or backend is added.

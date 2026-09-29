@@ -193,7 +193,7 @@ test('standalone launch downloads automatically with a single persistence reques
   });
   await page.goto('/tests/browser/app.html?program=standalone-test');
   await expect(page.locator('#map-status')).toContainText('Map available on this device');
-  await expect(page.locator('#offline-setup')).toBeHidden();await page.locator('#storage-protection').click();
+  await expect(page.locator('#offline-setup')).toBeHidden();await page.locator('#offline-close').click();await page.locator('#storage-protection').click();
   await expect(page.locator('#protection-details')).toHaveAttribute('open','');
   await page.reload();await expect(page.locator('#offline-summary')).toContainText('Map available offline');
   expect(await page.evaluate(()=>localStorage.getItem('requests'))).toBe('1');

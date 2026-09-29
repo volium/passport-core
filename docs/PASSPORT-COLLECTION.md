@@ -58,9 +58,9 @@ Ordering belongs in the passport IndexedDB database, not map storage or localSto
 
 Backups must preserve explicit order and confirmation metadata through export/import. Legacy schema-v1 backups remain readable and must not fabricate confirmed order. Version the new export contract deliberately; do not write new required fields into an unchanged v1 contract. Validate program identity, dates, duplicates, membership, size limits, and order references before an atomic merge. An old backup without ordering must not erase the user's existing explicit order. Conflicting explicit orders and imports that move collection dates require an explicit import confirmation; confirmed local order wins. Preserve the existing duplicate-visit-ID and add-only safety guarantees.
 
-## Future GPS check-in
+## Location check-in integration
 
-GPS check-in may capture date/time and verification evidence later. Known times may establish a default sequence, but manual placement remains separate metadata and never rewrites a captured timestamp. A manual entry can be positioned among timed entries on the same collection date. Do not implement GPS capture in this phase. Define timezone/calendar-day grouping before mixing GPS timestamps with manual calendar dates.
+Core 0.8.0 captures date/time and location evidence using the program timezone. Fully timed unconfirmed days default to capture order; mixed groups preserve saved order. Explicit manual placement remains separate metadata and never rewrites a captured timestamp. A manual entry can be positioned among timed entries on the same collection date. See GPS-CHECK-IN.md for the implemented contract.
 
 ## Acceptance and implementation sequence
 
@@ -100,3 +100,8 @@ API references: [IndexedDB transactions](https://developer.mozilla.org/en-US/doc
 The airport name precedes code and region, followed by visited/stamp status. Sections appear in planning order: Airport information, Stamp locations, Visit history, then Record a visit / Add another visit and its inline editor at the bottom. All three sections are collapsible. Stamp locations retain access status; descriptions over 360 characters have a short preview and expandable full instructions. Explicit airport cautions stay visible. Supporting description, address, runways and sources live in Airport information. Visit history is a separate disclosure, oldest first. All three disclosures start collapsed for a newly opened airport. In-session disclosure choices are preserved per airport.
 
 Record a visit / Add another visit opens an inline editor. Opening another airport and returning preserves unfinished fields and the open editor. Save and Cancel draft share a wrapping action row with a 12px gap. Dirty cancellation uses the shared app confirmation; Cancel/Escape keeps the draft, Discard draft removes only unsaved fields and returns focus to the recording action. Editing opens the editor; successful saving closes the editor, clears its draft/open state, exposes visit history, and shows transient confirmation beneath the recording action. Focus returns to that action. Failed or cancelled saves retain the editor and draft. Deletion updates summary/count/history labels without replacing an unfinished editor. No persistence schema changes are introduced.
+
+
+## Location-assisted check-in (0.8.0)
+
+Airport-proximity check-in, date/time evidence, manual fallback and backup/database v4 are implemented. See [GPS check-in](GPS-CHECK-IN.md) for policy, migration, editing, ordering and physical-device acceptance. This supersedes the earlier future-GPS notes. Existing manual visits remain date-only. No continuous tracking or backend is added.

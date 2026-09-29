@@ -52,7 +52,7 @@ The first runnable slice now spans both independent repositories. The long-term 
 - Package workflow: the app consumes a checked-in versioned core tarball, so app builds do not require an adjacent checkout. `npm run core:pack` explicitly refreshes local changes. Publishing to a registry is deferred.
 - Tests: core domain/storage tests and app configuration tests pass. Desktop/mobile Chromium and mobile WebKit cover the main workflow; Chromium also passes offline reload/save. Remote CI failed in WebKit offline reload with the same internal navigation error seen locally. The app now tests open-app offline saving separately on every browser and conditionally skips only that exact WebKit offline reload error after checking service-worker control and cached HTML. Physical iPhone offline startup verification and a successful remote rerun remain open. See app handoff notes for details.
 - Coordinate review: the owner approved the program map position for Copalis and the OurAirports position for Port of Whitman. Both source disagreements remain documented as resolved in the app's reconciliation report; missing region values use their source map layers.
-- Not yet complete: dated award eligibility, precise stamp targets, GPS, photos, ZIP archives, advanced filters, achievements, Oregon app, registry publication, and deployment. Physical-device testing remains a user acceptance step. The complete captured roster is now integrated; source gaps remain explicit rather than guessed.
+- Not yet complete: dated award eligibility, precise stamp targets, photos, ZIP archives, advanced filters, achievements, Oregon app, registry publication, and deployment. Physical-device testing remains a user acceptance step. The complete captured roster is now integrated; source gaps remain explicit rather than guessed.
 
 The first slice deliberately includes basic notes and JSON transfer earlier than the broader photo/ZIP phases to make local testing useful and portable. `passport-core/README.md` and `fly-washington/docs/DEVELOPMENT.md` describe current commands, contracts, and next work. Keep these documents and this status section current as development proceeds.
 
@@ -824,7 +824,7 @@ interface StampLocationDefinition {
 }
 ```
 
-This distinction is important because GPS verification should target a stamp location when appropriate rather than merely checking whether a pilot is somewhere within airport property.
+Stamp locations provide directions independently of GPS check-in. The approved airport-proximity policy in Sections 35–39 supersedes the original precise-stamp-target proposal.
 
 The UI should communicate multiple stamp locations clearly.
 
@@ -1158,7 +1158,7 @@ without inventing a time.
 
 The application must support entering a visit that occurred in the past.
 
-Manual check-in defaults to the current calendar date with unknown time; future GPS check-in may capture date/time. Allow date correction without inventing a manual timestamp. If a new visit predates an airport's collection date, explain both dates and offer Save and move stamp / Save visit only / Cancel before persistence; cancellation preserves the draft. Corrections to the stamp-establishing record require a separate move confirmation. See Section 25.
+Manual check-in defaults to the current calendar date with unknown time; location-assisted check-in captures date/time using the program timezone. Allow date correction without inventing a manual timestamp. If a new visit predates an airport's collection date, explain both dates and offer Save and move stamp / Save visit only / Cancel before persistence; cancellation preserves the draft. Corrections to the stamp-establishing record require a separate move confirmation. See Section 25.
 
 This is necessary for users who have already participated in a physical passport program before installing the application.
 
@@ -1197,7 +1197,7 @@ Keep the existing regional progress cards as the default My passport view and ov
 
 Manual dates do not establish same-day travel sequence. New stamps default to last in their date group with brief explanatory feedback. Legacy same-day entries have unconfirmed order; alphabetical display must not imply known travel history. Reorder reveals drag handles for one date, a visible insertion indicator, and Save order / Cancel. Dragging is restricted to that date; crossing dates requires a confirmed visit-date edit. Use handle-only touch dragging so ordinary scrolling remains available, with keyboard pick-up/move/drop and accessible announcements instead of visible up/down buttons.
 
-Persist saved ordering separately from visit dates and future GPS timestamps; never rewrite timestamps for display order. A new earlier visit requires an explicit choice: move the stamp date and append within that earlier day, or save visit-only history without moving the existing stamp. Correcting a stamp-establishing visit requires move confirmation. Saving another visit on an occupied airport/date warns before preserving both records. Preserve all other visits. Repeat visits do not duplicate stamps. Unknown times must remain unknown.
+Persist saved ordering separately from visit dates and captured GPS timestamps; never rewrite timestamps for display order. A new earlier visit requires an explicit choice: move the stamp date and append within that earlier day, or save visit-only history without moving the existing stamp. Correcting a stamp-establishing visit requires move confirmation. Saving another visit on an occupied airport/date warns before preserving both records. Preserve all other visits. Repeat visits do not duplicate stamps. Unknown times must remain unknown.
 
 ## 25.3 Implementation decisions and compatibility
 
@@ -1414,7 +1414,7 @@ Provide concise accessible status text, keyboard-operable Download/Cancel/Retry/
 
 Owner direction (2026-09-13): browser tabs offer map download; an installed PWA starts its initial map download automatically with visible status and Cancel. On first mobile browser use, recommend home-screen installation and explain the platform-specific steps and storage implications before a large transfer. This supersedes the earlier undecided A-E comparison and the original migration's blanket exclusion of automatic large downloads only for the bounded standalone flow below. The owner approved the responsive design and subsequently authorized implementation; core 0.6.0 now implements this policy locally.
 
-- **First use on mobile and desktop:** open the same dismissible, non-modal Offline access card used by the persistent navigation control (Section 32.4): **For the best experience, add this app to your Home Screen.** Offer platform/browser-specific steps, **Download map in this browser**, and **Not now**. Show measured total transfer size and mobile-data implications before browser download. Use the same card on desktop, with guidance appropriate to the selected platform/browser. Dismissal is remembered in the current context; installation help remains accessible later. Do not block visits or force installation.
+- **First use on mobile and desktop:** open the same dismissible, modal Offline access card used by the persistent navigation control (Section 32.4): **For the best experience, add this app to your Home Screen.** Offer platform/browser-specific steps, **Download map in this browser**, and **Not now**. Show measured total transfer size and mobile-data implications before browser download. Use the same card on desktop, with guidance appropriate to the selected platform/browser. Dismissal is remembered in the current context; installation help remains accessible later. Do not block visits or force installation.
 - **Installation copy:** say **Open it there and the offline map (<total size in MB>) should start downloading automatically.** Derive the total from the manifest. Use **start downloading**, not **start preparing**, in user instructions. Pair the iOS Share-menu instruction with a recognizable square-and-up-arrow glyph and readable **Share** text; keep the glyph slightly smaller than the instruction line. It supplements the instruction and is decorative to screen readers. Retain connectivity, cancellation, and existing-package qualifications from this section.
 - **iOS explanation:** before the browser transfer, explain that its map and visit storage do not transfer into the home-screen app; download in the installed app to avoid a duplicate map transfer. Existing visits use export/import. Say home-screen use helps the browser grant storage protection, not that only PWAs have guaranteed storage. Query the actual persistence result in either context; do not hard-code a grant or denial by platform.
 - **Standalone first eligible launch:** check actual installed bytes and lifecycle metadata first. If a usable package exists, use it without another download, including an older valid version with an offered update. Otherwise start initial preparation automatically after configuration/capability/quota checks, without a separate confirmation tap. Detect the configured standalone display mode, with the iOS standalone fallback; an installation event alone is not a launch or readiness signal ([Google display-mode guidance](https://web.dev/learn/pwa/detection#detecting_display_mode)).
@@ -1430,7 +1430,7 @@ Core owns context-aware orchestration, scoped control state, persistence handlin
 
 Replace the current connection-derived Local passport label with a keyboard/touch-operable **Offline access** control in the persistent application navigation on desktop and mobile. It must not disappear at the current 1,000px breakpoint. A compact mobile label may wrap or shorten presentation while preserving an accessible name and a visible text state; do not use a colored dot alone.
 
-Activation opens one dedicated, dismissible Offline access card, independent of Explore and My passport. First use opens this same card; later activation always provides the map status, actions, and browser installation help, even after onboarding was dismissed or a map was downloaded. Use it on desktop and mobile with bounded, scrollable content. Center the card horizontally within the application on desktop; let it move left as the window narrows while preserving side gutters on mobile. Place focus deliberately in the card; Close and Escape dismiss it and restore focus to its opener (the Offline access control for initial presentation). Do not trap focus in this non-modal card. Opening or closing it must preserve the active tab, map/list view, filters, selection, map position, and unfinished visit fields. It may temporarily cover part of the map when opened, but must not become a persistent gesture-obscuring error overlay.
+Activation opens one dedicated, dismissible Offline access card, independent of Explore and My passport. First use opens this same card; later activation always provides the map status, actions, and browser installation help, even after onboarding was dismissed or a map was downloaded. Use it on desktop and mobile with bounded, scrollable content. Center the card horizontally within the application on desktop; let it move left as the window narrows while preserving side gutters on mobile. Place focus deliberately in the card; Close and Escape dismiss it and restore focus to its opener (the Offline access control for initial presentation). Use a native modal dialog with a dimmed backdrop: contain keyboard focus and block background interaction until Close or Escape. Closing must not cancel an active download. Opening or closing it must preserve the active tab, map/list view, filters, selection, map position, and unfinished visit fields. It may temporarily cover part of the map when opened, but must not become a persistent gesture-obscuring error overlay.
 
 The control summarizes **map** state with qualified copy: Map not downloaded, Checking map, Downloading map (percentage), Verifying map, Map available offline, or Map needs attention. An installed working map with an update/failure retains its usable-map summary and a secondary update/error detail. Overall Offline ready may only be shown when shell, bundled program data, user storage, and the complete map are verified; map readiness alone must not imply cold app startup readiness.
 
@@ -1450,7 +1450,7 @@ On iOS, home-screen use is a factor in WebKit's persistence decision, not a guar
 
 - A tap or automatic standalone start must immediately show Starting/Downloading and expose adjacent status/progress and Cancel. Keep numerical progress visible in the persistent Offline access control on desktop and mobile while the user browses the map, list, or passport: for example **Map download 42%**, with a thin determinate progress bar. A remaining-MB label is an acceptable compact alternative. A spinner, icon, or generic Downloading label alone is insufficient once the manifest total is known. Expanded detail shows received/total MB and optionally remaining MB. Count archive plus supporting-file bytes, clamp displayed values, and avoid excessive decimal precision; use manifest totals and actual received bytes rather than elapsed-time guesses.
 - Separate network transfer from verification: at 100% received, show **Download complete - verifying map** until resources are checked, activated, and locally reopened. Do not fabricate a verification percentage or leave a misleading 100% Downloading state. Announce completion once; keep **Map available offline** visible after navigating away and returning. Never display a false installed state because a request started or reached 100%.
-- Group progress, status, and actions together at phone widths and enlarged text sizes. Keep the presentation subtle: compact navigation status, steady progress bar, no blocking modal, flashing indicator, repeated toast, or overlay obscuring map gestures. Cancel remains easy to reach from the progress control; cancelling stops only the current transfer and never removes a working installed map. Remove Delete map from the normal offline panel. Treat the basemap as a maintained part of the product, with **Retry** or **Repair map** only when needed; a repair must explain any full redownload and retain a usable version during replacement. Do not add an advanced delete menu in this iteration without a separate product decision.
+- Group progress, status, and actions together at phone widths and enlarged text sizes. Keep the presentation subtle: compact navigation status, steady progress bar, no automatic progress modal, flashing indicator, repeated toast, or persistent overlay obscuring map gestures. The user can close the Offline access modal while the transfer continues. Cancel remains easy to reach from the progress control; cancelling stops only the current transfer and never removes a working installed map. Remove Delete map from the normal offline panel. Treat the basemap as a maintained part of the product, with **Retry** or **Repair map** only when needed; a repair must explain any full redownload and retain a usable version during replacement. Do not add an advanced delete menu in this iteration without a separate product decision.
 - Keep installed package availability, current renderer health, shell readiness, and persistence protection as separate state. A temporary online style failure must not erase a valid package or imply that visits failed. A renderer error after verified installation must say the saved map could not be displayed and offer a renderer retry, not automatically prescribe a full redownload.
 - Replace write-only generic basemap announcements with owned, reconciled map status. Clear a prior map warning only after the corresponding renderer/resource failure has recovered; do not clear unrelated save/import/storage errors. Ignore stale asynchronous results from earlier style/version requests. Retry a failed same-version style after recovery instead of treating its previous style key as successful. Preserve real missing-byte and unreadable-resource errors.
 - Read persisted() at startup/foreground checks through the core environment abstraction, separately from requesting persist() during setup. Report granted/denied/unavailable/rejected checks honestly; an unknown result is not a denial. Protection is not evidence of package presence or a backup. The APIs are distinct in the [Storage Standard](https://storage.spec.whatwg.org/#storagemanager).
@@ -1605,122 +1605,23 @@ Android acceptance must exercise browser download, a saved visit, installation, 
 
 # 35. Check-In GPS Verification
 
-GPS verification is intended as evidence that the user was physically near the relevant location.
-
-It is not intended to be a cryptographic proof of presence.
-
-No GPS-based system should be presented as impossible to spoof.
-
----
+Core 0.8.0 implements user-initiated airport-proximity check-in. The owner approved an airport reference point and configurable radius instead of precise stamp targets: all FBOs carry the same airport stamp. Washington starts with 1.5 statute miles (2414.016 m), 200 m maximum reported accuracy, 30-second maximum fix age and acquisition deadline, and America/Los_Angeles visit-day grouping. These are initial policy values pending real-airport acceptance, not measured guarantees. No anti-spoofing or official award claim is made.
 
 # 36. Verification UX
 
-Expected flow:
-
-```text
-Airport detail
-    ↓
-Check In
-    ↓
-Verify I'm Here
-    ↓
-Request location permission
-    ↓
-Obtain location
-    ↓
-Compare to eligible stamp/location
-    ↓
-Show verification result
-    ↓
-Save check-in
-```
-
-Example successful result:
-
-```text
-Location verified
-42 m from the FBO stamp location
-```
-
-A user should be able to understand what was actually verified.
-
----
+Check in beside Explore/My passport opens a modal with first-use explanation, foreground acquisition, explicit eligible-airport selection, optional notes and explicit Save. Record a visit / Add another visit in details opens an explicit location/manual choice for that airport. Multiple candidates never save automatically. Manual search, retry, cancellation, date entry and existing stamp/duplicate confirmations remain available. Closing returns focus and does not change map position or existing drafts. See [GPS-CHECK-IN.md](docs/GPS-CHECK-IN.md) for the complete implemented flow and acceptance requirements.
 
 # 37. Verification Target
 
-Where the program defines physical stamp locations, verification should normally compare the user's position to the stamp location.
-
-It should not merely check whether the user is somewhere within an airport boundary.
-
-Programs that do not use physical stamp locations must be able to define different verification behavior.
-
----
+Program-owned airport reference coordinates and default radius, with optional airport overrides, define eligibility. Accept only recent, sufficiently accurate readings whose distance plus reported accuracy fits inside the radius. No precise stamp coordinates are required. Physical stamp instructions remain independent. Core owns acquisition, distance evaluation and UI; the program owns data, policy, timezone and physical acceptance.
 
 # 38. Verification Evidence
 
-Store useful evidence rather than only a Boolean.
-
-Conceptual model:
-
-```ts
-interface VerificationEvidence {
-    method: "gps";
-
-    status:
-        | "verified"
-        | "unverified"
-        | "suspicious";
-
-    latitude?: number;
-    longitude?: number;
-    accuracyMeters?: number;
-
-    timestamp?: string;
-
-    targetId?: string;
-    distanceMeters?: number;
-
-    indicators?: VerificationIndicator[];
-}
-```
-
-Possible future indicators:
-
-```text
-mock-location signal
-unexpectedly poor accuracy
-device integrity signal
-impossible timing
-```
-
-Browser capability may limit available evidence.
-
-The system must tolerate this.
-
----
+Store reported coordinates, accuracy, capture/check times, target ID/coordinate snapshot, distance and applied policy with the visit. Retain calendar visitedAt and add known UTC capture time and program timezone. Database/export v4 protects evidence from old writers; imports retain v1-v3 compatibility and validate evidence against its original target/policy. Notes edits retain evidence; date changes explicitly remove it. Fully timed unconfirmed days default to timestamp order; explicit order and unknown manual times are preserved. See the GPS contract for migration, editing, ordering and privacy details.
 
 # 39. Verification Failure
 
-Failure to verify must not necessarily prevent the user from recording a check-in.
-
-Examples:
-
-- historical visit;
-- denied location permission;
-- poor GPS reception;
-- browser limitation;
-- stamp unavailable;
-- airport data incorrect.
-
-Such a visit may be saved as:
-
-```text
-Unverified
-```
-
-rather than discarded.
-
-Individual programs may later choose stronger policy if needed.
+Permission denied, unsupported/insecure context, unavailable or imprecise location, timeout and outside-range results are actionable states, not accusations. Users may retry or save manually. Stop acquisition on completion, cancellation, hiding or destruction; never continuously track or automatically retry. PWA installation does not promise permanent permission, and an offline map does not guarantee a location fix.
 
 ---
 
@@ -2188,7 +2089,7 @@ The historical WebKit internal-navigation-error exception in the status record i
 Phase U1 must cover manual browser downloads and automatic initial standalone preparation, including retained suppression after cancel/delete, a deferred offline-first attempt, and the full-origin-erasure limitation in Section 32.3.
 
 1. First use, setup acceptance/defer or the approved automatic trigger, installed-map bypass, and the agreed behavior after cancellation/deletion/failure. Verify actual request counts across reloads and tabs; preference storage failures must not create an automatic download loop.
-2. Desktop and phone discoverability without scrolling: Offline access remains visible and opens the same independent card on first use and subsequent activation, preserving the active tab and Explore/map/list/draft state. Verify Close/Escape, focus restoration, non-modal keyboard navigation, and installation help after dismissal or download. Verify the smaller Share glyph has adjacent readable Share text, desktop card centering and narrow-screen gutters, and repeated click/Enter/Space expansion and collapse for each disclosure. Test narrow screens, enlarged text, keyboard, and VoiceOver where available.
+2. Desktop and phone discoverability without scrolling: Offline access remains visible and opens the same independent card on first use and subsequent activation, preserving the active tab and Explore/map/list/draft state. Verify Close/Escape, focus restoration, contained modal keyboard navigation, and installation help after dismissal or download. Verify the smaller Share glyph has adjacent readable Share text, desktop card centering and narrow-screen gutters, and repeated click/Enter/Space expansion and collapse for each disclosure. Test narrow screens, enlarged text, keyboard, and VoiceOver where available.
 3. Starting, byte progress, verification, completed installation, update failure with usable old map, and actionable errors. Assert numerical percentage or remaining MB stays visible on the map/list/passport layouts, with received/total MB in detail and a separate verification phase. A healthy installed map has no normal Delete action; cancelling an update preserves it. Test internal removal/cleanup separately.
 4. Offline online-style failure followed by connectivity recovery and successful local installation: old warnings clear only after renderer recovery, unrelated notices survive, and stale requests cannot override newer success. Test a same-style retry and real missing resources separately.
 5. persist() grant followed by reload and persisted() grant/false/unsupported/rejection. Availability and protection remain independent. Check/request happens automatically without requiring a manual action; granted protection shows no indicator, while denied/unknown results show a subtle accessible control with details only on expansion. Foreground/cross-tab events do not duplicate requests or regress current operation state.
@@ -2490,7 +2391,7 @@ The Oregon test application is an architectural canary, not a distraction from W
 
 The next offline UX work is Phase U1 below; its responsive UX review is complete as recorded in Phase U1. M0/M1 retain the original migration sequence and evidence requirements; they are not instructions to reimplement the already deployed renderer.
 
-Phases 0–9 below retain the original roadmap and exit criteria. Repository setup, the map/passport slice, basic filters, notes/JSON transfer, and the full captured roster are already implemented to the extent described in the status record; GPS, photos/ZIP, dated awards, advanced filters, achievements, and Oregon remain future work. Do not treat these phases as a blank-repository starting point or claim remote/device checks passed merely because tooling exists.
+Phases 0–9 below retain the original roadmap and exit criteria. Repository setup, the map/passport slice, basic filters, notes/JSON transfer, and the full captured roster are already implemented to the extent described in the status record; photos/ZIP, dated awards, advanced filters, achievements, and Oregon remain future work. Do not treat these phases as a blank-repository starting point or claim remote/device checks passed merely because tooling exists.
 
 ## Migration Phase M0 — Measure Washington Map Candidates
 
@@ -2533,7 +2434,7 @@ Migration phases record the map implementation and its remaining release gates; 
 
 ## Phase U1 — Offline setup and trustworthy status (implemented locally; device acceptance pending)
 
-Design-review artifact (2026-09-13): `fly-washington/docs/mockups/offline-access.html` is a self-contained interactive desktop/mobile mockup, with scenario controls and usage notes in its adjacent README. It demonstrates layout and simulated feedback only; production download/storage behavior is unchanged. Feedback revision (2026-09-19): one non-modal map card now serves first use and the persistent Offline access control on both layouts; installation help remains available, granted protection is hidden, and exception details expand on demand. Owner approval (2026-09-19): the revised desktop/mobile mockup is approved as the Phase U1 design baseline, including the centered responsive card, smaller Share glyph, consistent collapsible sections, numerical progress, cancellation, and subtle storage-protection feedback. This completes mockup design review. The owner subsequently authorized implementation: core 0.6.0 now contains the card, numeric progress, automatic persistence checks, bounded standalone setup, and renderer recovery; Fly Washington supplies installation guidance and consumes the new tarball. Automated validation: core typecheck/lint/build, 27 unit tests, and all 11 browser scenarios passed, with the three affected UI scenarios rerun after the final context change. App checks and desktop/mobile Chromium full-map cold-offline tests passed; WebKit UI passed, while its existing internal cold-navigation exception remains a documented skip. Detailed evidence is in the app development notes; physical-device acceptance remains outstanding. No commit, push, or deployment is implied.
+Design-review artifact (2026-09-13): `fly-washington/docs/mockups/offline-access.html` is a self-contained interactive desktop/mobile mockup, with scenario controls and usage notes in its adjacent README. It demonstrates layout and simulated feedback only; production download/storage behavior is unchanged. Historical feedback revision (2026-09-19; superseded by the modal behavior in Section 32.4): one non-modal map card served first use and the persistent Offline access control on both layouts; installation help remains available, granted protection is hidden, and exception details expand on demand. Owner approval (2026-09-19): the revised desktop/mobile mockup is approved as the Phase U1 design baseline, including the centered responsive card, smaller Share glyph, consistent collapsible sections, numerical progress, cancellation, and subtle storage-protection feedback. This completes mockup design review. The owner subsequently authorized implementation: core 0.6.0 now contains the card, numeric progress, automatic persistence checks, bounded standalone setup, and renderer recovery; Fly Washington supplies installation guidance and consumes the new tarball. Automated validation: core typecheck/lint/build, 27 unit tests, and all 11 browser scenarios passed, with the three affected UI scenarios rerun after the final context change. App checks and desktop/mobile Chromium full-map cold-offline tests passed; WebKit UI passed, while its existing internal cold-navigation exception remains a documented skip. Detailed evidence is in the app development notes; physical-device acceptance remains outstanding. No commit, push, or deployment is implied.
 
 1. Follow the approved desktop/mobile mockups and Section 32.3 browser/PWA policy for first use, deferred setup, progress, verification, installed, failed, and missing-package states. Resolve the installed-app delete-control report using the actual final download status/build before assigning a cause.
 2. Core: implement one readiness/state model, persistence rechecking, owned renderer-error recovery, and serialized/coalesced lifecycle refreshes; retain IndexedDB and full pre-activation verification/update safety, with the approved lightweight reopening checks in Section 33.
@@ -2645,12 +2546,12 @@ filters consistently affect map and list on desktop and mobile
 
 ---
 
-## Phase 4 — GPS Verification
+## Phase 4 — GPS Verification (implemented in core 0.8.0; physical acceptance pending)
 
 Implement:
 
 - browser geolocation service;
-- stamp-location radius calculation;
+- airport-reference proximity and accuracy evaluation;
 - verification evidence;
 - verified/unverified status;
 - GPS E2E tests.
@@ -3037,7 +2938,7 @@ Continue from the implemented MapLibre/PMTiles system and committed core 0.5.1 m
 
 This edit changes planning only. Core/app READMEs, development notes, and offline-map API/release records must link to this plan and distinguish implemented manual downloads from planned setup. Their older unpublished/deployment-gate wording must be reconciled with verified release/device evidence during Phase U1. Preserve historical measurements and testing limitations rather than claiming unobserved acceptance.
 
-Keep unrelated roadmap work visible: dated awards, precise stamp targets, GPS, advanced filters, photos/ZIP backup, achievements, Oregon validation, and registry publication remain separate. No production code, package contents, commit, push, or deployment changes are part of this documentation task.
+Keep unrelated roadmap work visible: dated awards, precise stamp directions, advanced filters, photos/ZIP backup, achievements, Oregon validation, and registry publication remain separate. No production code, package contents, commit, push, or deployment changes are part of this documentation task.
 
 ---
 

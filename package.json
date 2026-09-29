@@ -1,6 +1,6 @@
 {
   "name": "@passport/core",
-  "version": "0.7.7",
+  "version": "0.8.0",
   "description": "Local-first, program-independent aviation passports",
   "type": "module",
   "license": "MIT",
@@ -20,7 +20,7 @@
     "build": "node scripts/build-worker.mjs && tsc && node scripts/copy-css.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests",
-    "test": "vitest run tests/core.test.ts tests/offline.test.ts tests/collection.test.ts",
+    "test": "vitest run tests/core.test.ts tests/offline.test.ts tests/collection.test.ts tests/geolocation.test.ts",
     "prepack": "npm run build",
     "test:browser": "playwright test"
   },

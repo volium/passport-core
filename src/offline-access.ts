@@ -8,14 +8,16 @@ export interface InstallationGuidance {
 export const standalone = () => matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 const share = '<svg class="share-icon" viewBox="0 0 24 28" aria-hidden="true"><path d="M5 11H3v14h18V11h-2M12 18V2m-5 5 5-5 5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 export const offlineNavigation = `<div class="offline-navigation"><button id="offline-access" type="button" aria-controls="offline-card" aria-expanded="false">${mapIcon}<span class="sr-only"><strong>Offline access</strong> · <span id="offline-summary">Checking map</span></span><span class="header-offline-label">Checking map</span><progress id="offline-progress" aria-label="Map download" hidden></progress></button><button id="storage-protection" type="button" aria-label="Storage protection: Unknown" aria-controls="protection-details" hidden>${protectionIcon}</button><span id="offline-announcement" class="sr-only" role="status" aria-live="polite"></span></div>`;
-export const offlineCard = `<section id="offline-card" class="offline-card" role="dialog" aria-labelledby="offline-heading" hidden>
+export const offlineCard = `<dialog id="offline-card" class="offline-card" aria-modal="true" aria-labelledby="offline-heading" hidden>
   <header class="offline-card-heading"><h2 id="offline-heading" tabindex="-1">Offline access</h2><button id="offline-close" type="button">Close</button></header>
+  <div class="offline-card-content">
   <p class="offline-muted">Check your map and passport before travel.</p>
   <section id="offline-setup" class="offline-box offline-setup"><h3>Take your passport with you</h3><p id="installation-intro"></p><p id="installation-storage"></p><details class="offline-disclosure"><summary>Home Screen setup</summary><ol id="installation-steps"></ol><p>Keep the app open while your map downloads. Mobile data may be used.</p></details></section>
   <section class="offline-box"><h3 id="map-name"></h3><p id="map-size" class="offline-muted"></p><p id="map-status"></p><progress id="map-progress" aria-label="Map download" hidden></progress><p id="map-transfer-note">Includes map details, labels, and supporting files. Keep the app open; mobile data may be used.</p><p id="map-renderer-status" role="status" hidden></p><div class="backup-actions"><button id="map-download" type="button">Download map</button><button id="map-cancel" type="button" hidden>Cancel download</button><button id="map-retry" type="button" hidden>Try map again</button></div><details id="map-repair" class="offline-disclosure" hidden><summary>Repair options</summary><p>A replacement downloads the complete map again. Your visits stay unchanged; a working saved map is retained until its replacement is verified.</p><div class="backup-actions"><button id="map-replace" type="button">Download replacement</button><button id="map-rollback" type="button" hidden>Restore previous map</button></div></details></section>
   <div class="offline-row" id="offline-shell">Open app offline: not verified.</div><div class="offline-row">Airport information: loaded.</div><div class="offline-row" id="offline-visits">Passport storage: checking.</div>
   <details id="protection-details" class="offline-disclosure" hidden><summary id="protection-heading">Storage protection${protectionIcon}</summary><p id="protection-description"></p><div class="export-action"><button id="offline-export" type="button" aria-describedby="offline-export-status">Export passport</button><p id="offline-export-status" class="export-feedback" role="status" aria-live="polite"></p></div></details><p class="offline-muted">Visits are saved in this browser/app. Export a backup to transfer them. Maps are downloaded separately.</p>
-</section>`;
+</div>
+</dialog>`;
 
 /** Reusable presentation/orchestration; no program-specific assets or browser installation logic. */
 export class OfflineAccess {
@@ -32,18 +34,16 @@ export class OfflineAccess {
     retry: () => void; exportPassport: () => void;
   }) {
     this.unsubscribe = manager.subscribe(status => this.render(status));
-    this.on('#offline-access', () => this.open());
+    this.on('#offline-access', () => this.open(false, this.el('#offline-access')));
     this.on('#offline-close', () => this.close());
-    this.on('#storage-protection', () => this.open(true));
+    this.on('#storage-protection', () => this.open(true, this.el('#storage-protection')));
     this.on('#offline-export', options.exportPassport);
     this.on('#map-download', () => { void manager.download(); });
     this.on('#map-replace', () => { void manager.download(); });
     this.on('#map-cancel', () => manager.cancel());
     this.on('#map-retry', options.retry);
     this.on('#map-rollback', () => { void manager.rollback().catch(error => this.rendererStatus(String(error))); });
-    root.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && !this.el('#offline-card').hidden && !this.el('#offline-card').inert) { event.preventDefault(); event.stopImmediatePropagation(); this.close(); }
-    }, {capture:true,signal:this.events.signal});
+    this.el('#offline-card').addEventListener('cancel', event => { event.preventDefault(); this.close(); }, {signal:this.events.signal});
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void this.refresh(); }, {signal:this.events.signal});
     window.addEventListener('online', () => { void this.refresh(); }, {signal:this.events.signal});
     navigator.serviceWorker?.addEventListener('controllerchange', () => { void this.refresh(); }, {signal:this.events.signal});
@@ -74,20 +74,22 @@ export class OfflineAccess {
       ]);
     })().catch(() => { if (!this.closed) this.el('#map-status').textContent = 'Map storage could not be checked. Retry when browser storage is available.'; }).finally(() => { this.refreshing = undefined; });
   }
-  open(protection = false) {
-    const card = this.el('#offline-card');
-    if (card.hidden) this.opener = document.activeElement instanceof HTMLElement && this.root.contains(document.activeElement) ? document.activeElement : this.el('#offline-access');
+  open(protection = false, opener?: HTMLElement) {
+    const card = this.el<HTMLDialogElement>('#offline-card');
+    if (!card.open) this.opener = opener ?? this.el('#offline-access');
     card.hidden = false;
+    if (!card.open) card.showModal();
     this.el('#offline-access').setAttribute('aria-expanded','true');
     this.el<HTMLDetailsElement>('#protection-details').open = protection;
     const heading = this.el(protection ? '#protection-heading' : '#offline-heading');
     heading.focus({preventScroll:true});
     if (protection) {
-      const sticky = this.el('.offline-card-heading');
-      card.scrollTop += heading.getBoundingClientRect().top - sticky.getBoundingClientRect().bottom - 12;
-    } else card.scrollTop = 0;
+      const content = this.el('.offline-card-content');
+      content.scrollTop += heading.getBoundingClientRect().top - content.getBoundingClientRect().top - 12;
+    } else this.el('.offline-card-content').scrollTop = 0;
   }
   close() {
+    this.el<HTMLDialogElement>('#offline-card').close();
     this.el('#offline-card').hidden = true;
     this.el('#offline-access').setAttribute('aria-expanded','false');
     (this.opener?.isConnected && this.opener.getClientRects().length ? this.opener : this.el('#offline-access')).focus({preventScroll:true});
@@ -152,5 +154,5 @@ export class OfflineAccess {
     if (details.hidden) details.open = false;
     this.el('#protection-description').textContent = status.persistence === 'not-granted' ? 'The browser has not granted storage protection. Your data is saved, but the browser may remove it to free space. Export your passport as a backup and check offline availability before travel. Installing may help; it does not guarantee approval.' : 'Storage protection could not be confirmed automatically. This does not mean your map or visits are missing. Export your passport as a backup.';
   }
-  destroy() { this.closed = true; this.events.abort(); this.unsubscribe(); }
+  destroy() { this.el<HTMLDialogElement>('#offline-card').close(); this.closed = true; this.events.abort(); this.unsubscribe(); }
 }

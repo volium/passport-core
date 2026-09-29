@@ -1,3 +1,5 @@
+import { LocationCheckIn, locationIcon } from './check-in.js';
+import { calendarDate, visitLocationLabel } from './geolocation.js';
 import { appearanceButton } from './header-icons.js';
 import { PassportCollection } from './passport-collection.js';
 import { collectionDates, collectionChanges, reconcileOrders, visitStampLabel } from './collection.js';
@@ -28,6 +30,7 @@ export class PassportApp {
   private visits: CheckIn[] = [];
   private snapshot: PassportSnapshot = { visits: [], orders: [], revision: 0 };
   private collection?: PassportCollection;
+  private locationCheckIn?: LocationCheckIn;
   private exploreDrafts = new Map<string, { id: string; date: string; notes: string; revision: number }>();
   private detailEditors = new Set<string>();
   private detailSections = new Map<string, Set<string>>();
@@ -46,6 +49,7 @@ export class PassportApp {
     this.store = new PassportStore(options.program.id);
   }
   private get program() { return this.options.program; }
+  private maxVisitDate() { return this.program.checkIn ? [localDate(), calendarDate(Date.now(), this.program.checkIn.timeZone)].sort().at(-1)! : localDate(); }
   private el<T extends HTMLElement = HTMLElement>(selector: string): T { return this.root.querySelector<T>(selector)!; }
   private announce(message: string) {
     this.feedback(this.passportOpen ? '#passport-notice' : '#notice', message);
@@ -64,7 +68,7 @@ export class PassportApp {
       <header class="app-header"><div class="brand"><span class="brand-icon" aria-hidden="true">✈</span><div><span class="eyebrow">${escape(p.branding.eyebrow)}</span><h1>${escape(p.shortName)}</h1></div></div>
       <div id="overall" class="overall"></div><div class="header-actions">${appearanceButton}${offlineNavigation}</div></header>
       <div class="workspace" data-view="map" data-section="explore"><aside class="sidebar" aria-label="Passport navigation and airport explorer">
-      <div class="primary-tabs" role="tablist" aria-label="Main view"><button id="explore-tab" role="tab" type="button" aria-selected="true" aria-controls="explore-panel">Explore</button><button id="passport-tab" role="tab" type="button" aria-selected="false" aria-controls="passport-panel" tabindex="-1">My passport</button></div>
+      <div class="checkin-nav"><div class="primary-tabs" role="tablist" aria-label="Main view"><button id="explore-tab" role="tab" type="button" aria-selected="true" aria-controls="explore-panel">Explore</button><button id="passport-tab" role="tab" type="button" aria-selected="false" aria-controls="passport-panel" tabindex="-1">My passport</button></div>${p.checkIn ? `<button id="quick-checkin" class="checkin-action" type="button">${locationIcon}Check in</button>` : ''}</div>
       <p id="notice" role="status" aria-live="polite"></p>
       <section id="explore-panel" class="explore-panel" role="tabpanel" aria-labelledby="explore-tab">
       <div class="browse"><div class="section-heading"><h2>Explore airports</h2><span id="match-count" class="count"></span></div>
@@ -75,6 +79,13 @@ export class PassportApp {
       <section id="passport-panel" class="passport-panel" role="tabpanel" hidden aria-labelledby="passport-tab"><div class="passport-content"><p>${escape(p.description)}</p><p class="local-label">Saved on this device</p><div class="backup-actions"><button id="export" type="button" aria-describedby="export-status">Export passport</button><button id="import-button" type="button" aria-describedby="passport-notice">Import passport</button><input id="import" type="file" accept="application/json,.json" hidden></div><p id="export-status" class="export-feedback" role="status" aria-live="polite"></p><p id="passport-notice" role="status" aria-live="polite"></p><section class="passport-section"><h3>Your regional passport</h3><div id="passport-collection"></div></section><p class="data-notice">${escape(p.dataNotice)}</p><p><a href="${escape(new URL('./notices.txt',import.meta.url).href)}" target="_blank" rel="noopener">Software licenses</a></p></div></section>
       </aside><section class="map-section" aria-label="Airport map"><div id="map"></div><section id="airport-preview" class="airport-preview" hidden aria-label="Selected airport"><div><strong id="preview-name"></strong><p id="preview-meta"></p></div><div class="preview-actions"><button id="preview-details" type="button">View details</button><button id="preview-close" type="button" aria-label="Dismiss airport preview">Close</button></div></section><div class="map-caption"><div class="map-legend"><span class="map-legend-item"><span class="map-legend-marker" aria-hidden="true"></span>Not visited</span><span class="map-legend-item"><span class="map-legend-marker is-visited" aria-hidden="true"></span>Visited</span></div><button id="fit" type="button">Show all matches</button></div></section></div>
       ${offlineCard}`;
+    if (p.checkIn) {
+      this.locationCheckIn = new LocationCheckIn(this.root, p, {
+        snapshot: () => this.snapshot, save: (visit, revision) => this.saveRecord(visit, revision),
+        saved: airport => { this.feedback(this.passportOpen ? '#passport-notice' : '#notice', 'Visit saved at ' + airport.name + '.', true); if (this.selected?.id === airport.id && !this.exploreDrafts.has(airport.id) && !this.el<HTMLFormElement>('#checkin')?.dataset.editId) { this.renderDetail(); this.feedback('#visit-save-confirmation', 'Visit saved on this device.', true); this.el('#open-visit-editor').focus({preventScroll:true}); } },
+      });
+      this.el('#quick-checkin').addEventListener('click', () => this.locationCheckIn?.open(undefined, this.el('#quick-checkin')));
+    }
     this.collection = new PassportCollection(this.el('#passport-collection'), p, {
       order: async (order, revision) => { try { await this.store.saveOrder(order, revision); } catch (error) { await this.reloadPassport(); throw error; } await this.reloadPassport(); this.render(); },
       showDetails: id => {
@@ -227,7 +238,7 @@ export class PassportApp {
   private syncPanels() {
     const mobile = matchMedia('(max-width: 760px)').matches;
     const modal = mobile && !this.passportOpen && !!this.selected && !this.previewOnly;
-    for (const selector of ['.app-header', '.offline-navigation', '#offline-card', '.map-section', '#notice', '.skip-link', '.primary-tabs']) this.el(selector).inert = modal;
+    for (const selector of ['.app-header', '.offline-navigation', '#offline-card', '.map-section', '#notice', '.skip-link', '.checkin-nav']) this.el(selector).inert = modal;
     this.el('.browse').inert = this.passportOpen || (mobile && !!this.selected && !this.previewOnly);
     this.el('#detail').inert = this.passportOpen;
     const detail = this.el('#detail');
@@ -374,7 +385,7 @@ export class PassportApp {
     detail.hidden = false;
     this.syncPanels();
     this.el('.browse').hidden = true;
-    const visits = this.visits.filter(v => v.airportId === airport.id).sort((a, b) => a.visitedAt.localeCompare(b.visitedAt));
+    const visits = this.visits.filter(v => v.airportId === airport.id).sort((a, b) => a.visitedAt.localeCompare(b.visitedAt) || (a.capturedAt ?? '').localeCompare(b.capturedAt ?? ''));
     const stampDate = collectionDates(visits).get(airport.id);
     const draft = edit ? undefined : this.exploreDrafts.get(airport.id);
     const sections = this.detailSections.get(airport.id) ?? new Set<string>();
@@ -391,18 +402,23 @@ export class PassportApp {
 </details>
     <details class="airport-stamps detail-disclosure" data-detail-section="stamps" ${sections.has('stamps') ? 'open' : ''}><summary>Stamp locations</summary>${airport.stampLocations?.length ? airport.stampLocations.map(s => `<article class="stamp"><strong>${escape(s.name)}</strong><small>Access: ${escape(s.access.replace('-', ' '))}</small>${s.description.length > 360 ? `<p>${escape(s.description.slice(0, 180))}&hellip;</p><details class="stamp-instructions"><summary>Show full instructions</summary><p>${escape(s.description)}</p></details>` : `<p>${escape(s.description)}</p>`}</article>`).join('') : '<p>Stamp details have not been added.</p>'}
 </details>
-    <details class="detail-disclosure" id="visit-history" data-detail-section="history" ${sections.has('history') ? 'open' : ''}><summary id="history-heading">Visit history <span id="visit-count" class="muted">${visits.length}</span></summary><div class="history">${visits.length ? visits.map(v => `<article><strong>${escape(v.visitedAt)}</strong><small>Unverified &middot; ${visitStampLabel(v, stampDate)}</small><p>${escape(v.notes || 'No notes for this visit.')}</p><div><button type="button" data-edit="${escape(v.id)}">Edit</button><button type="button" data-delete="${escape(v.id)}">Delete</button></div></article>`).join('') : '<p class="muted">Your first visit is still ahead of you.</p>'}</div></details>
-    <button type="button" id="open-visit-editor" class="primary" aria-controls="checkin" aria-expanded="${editorOpen}" ${editorOpen ? 'hidden' : ''}>${visits.length ? 'Add another visit' : 'Record a visit'}</button>
+    <details class="detail-disclosure" id="visit-history" data-detail-section="history" ${sections.has('history') ? 'open' : ''}><summary id="history-heading">Visit history <span id="visit-count" class="muted">${visits.length}</span></summary><div class="history">${visits.length ? visits.map(v => `<article><strong>${escape(v.visitedAt)}</strong><small>${escape(visitLocationLabel(v))} &middot; ${visitStampLabel(v, stampDate)}</small><p>${escape(v.notes || 'No notes for this visit.')}</p><div><button type="button" data-edit="${escape(v.id)}">Edit</button><button type="button" data-delete="${escape(v.id)}">Delete</button></div></article>`).join('') : '<p class="muted">Your first visit is still ahead of you.</p>'}</div></details>
+    <button type="button" id="open-visit-editor" class="primary" ${this.program.checkIn && airport.participation.participating ? 'aria-haspopup="dialog"' : `aria-controls="checkin" aria-expanded="${editorOpen}"`} ${editorOpen ? 'hidden' : ''}>${visits.length ? 'Add another visit' : 'Record a visit'}</button>
     <p id="visit-save-confirmation" role="status" class="muted"></p>
-    <form id="checkin" ${editorOpen ? '' : 'hidden'} data-edit-id="${escape(edit?.id ?? draft?.id ?? '')}" data-revision="${draft?.revision ?? this.snapshot.revision}"><h3>${edit || draft?.id ? 'Edit visit' : 'Add a visit'}</h3><label>Visit date<input name="date" type="date" required max="${localDate()}" value="${edit?.visitedAt ?? draft?.date ?? localDate()}"></label><label>Notes <span class="muted">(optional)</span><textarea name="notes" rows="3" maxlength="10000" placeholder="A good landing, a great lunch…">${escape(edit?.notes ?? draft?.notes ?? '')}</textarea></label><p class="muted">Saved locally as an unverified visit. Time is not recorded.</p><div class="visit-actions"><button class="primary" type="submit">${edit || draft?.id ? 'Save changes' : 'Save check-in'}</button><button type="button" id="cancel-visit-draft">Cancel draft</button></div><p id="save-status" role="status"></p></form>`;
+    <form id="checkin" ${editorOpen ? '' : 'hidden'} data-edit-id="${escape(edit?.id ?? draft?.id ?? '')}" data-revision="${draft?.revision ?? this.snapshot.revision}"><h3>${edit || draft?.id ? 'Edit visit' : 'Add a visit'}</h3><label>Visit date<input name="date" type="date" required max="${this.maxVisitDate()}" value="${edit?.visitedAt ?? draft?.date ?? localDate()}"></label><label>Notes <span class="muted">(optional)</span><textarea name="notes" rows="3" maxlength="10000" placeholder="A good landing, a great lunch…">${escape(edit?.notes ?? draft?.notes ?? '')}</textarea></label><p class="muted">${edit?.timeKnown ? 'Changing only notes keeps the captured location and time. Changing the date removes that evidence after confirmation.' : 'Saved locally as an unverified visit. Time is not recorded.'}</p><div class="visit-actions"><button class="primary" type="submit">${edit || draft?.id ? 'Save changes' : 'Save check-in'}</button><button type="button" id="cancel-visit-draft">Cancel draft</button></div><p id="save-status" role="status"></p></form>`;
     detail.querySelectorAll<HTMLDetailsElement>('[data-detail-section]').forEach(section => section.addEventListener('toggle', () => {
       if (!section.isConnected) return;
       if (section.open) sections.add(section.dataset.detailSection!); else sections.delete(section.dataset.detailSection!);
     }));
-    this.el('#open-visit-editor').addEventListener('click', () => {
+    const openManualVisit = () => {
       this.detailEditors.add(airport.id); this.el('#checkin').hidden = false;
       this.el('#open-visit-editor').hidden = true; this.el('#open-visit-editor').setAttribute('aria-expanded', 'true');
       this.el<HTMLInputElement>('#checkin [name="date"]').focus();
+    };
+    this.el('#open-visit-editor').addEventListener('click', () => {
+      const target = this.program.airports.find(a => a.id === airport.id && a.participation.participating);
+      if (this.locationCheckIn && target) this.locationCheckIn.open(target, this.el('#open-visit-editor'));
+      else openManualVisit();
     });
     this.el('#cancel-visit-draft').addEventListener('click', () => { void (async () => {
       const button = this.el<HTMLButtonElement>('#cancel-visit-draft'); button.disabled = true;
@@ -444,11 +460,13 @@ export class PassportApp {
     this.el('#save-status').classList.remove('sr-only');
     const data = new FormData(form);
     const date = String(data.get('date'));
-    if (!isCalendarDate(date) || date > localDate()) { this.el('#save-status').textContent = 'Choose a valid date today or earlier.'; return; }
+    if (!isCalendarDate(date) || date > this.maxVisitDate()) { this.el('#save-status').textContent = 'Choose a valid date today or earlier.'; return; }
     button.disabled = true;
     const now = new Date().toISOString();
     try {
-      const saved = await this.saveRecord({ id: edit?.id ?? visitId(), programId: this.program.id, airportId: airport.id, visitedAt: date, timeKnown: false, createdAt: edit?.createdAt ?? now, updatedAt: now, notes: String(data.get('notes')).slice(0, 10000), verification: { status: 'unverified' } }, Number(form.dataset.revision));
+      if (edit?.timeKnown && edit.visitedAt !== date && !await confirmCollection(this.root, 'Changing the visit date removes its captured time and location confirmation. The corrected visit will be manual.', 'Change date', 'Remove location evidence?')) return;
+      const keepEvidence = edit?.timeKnown && edit.visitedAt === date;
+      const saved = await this.saveRecord({ id: edit?.id ?? visitId(), programId: this.program.id, airportId: airport.id, visitedAt: date, timeKnown: !!keepEvidence, createdAt: edit?.createdAt ?? now, updatedAt: now, notes: String(data.get('notes')).slice(0, 10000), verification: keepEvidence ? edit.verification : { status: 'unverified' }, ...(keepEvidence ? {capturedAt:edit.capturedAt,timeZone:edit.timeZone} : {}) }, Number(form.dataset.revision));
       if (!saved) return;
       this.exploreDrafts.delete(airport.id);
       this.detailEditors.delete(airport.id);
@@ -514,7 +532,7 @@ export class PassportApp {
         detail.querySelectorAll<HTMLElement>('.history article').forEach(row => {
           const visitId = row.querySelector<HTMLElement>('[data-edit]')?.dataset.edit;
           const visit = this.visits.find(v => v.id === visitId);
-          if (visit) row.querySelector('small')!.textContent = 'Unverified - ' + visitStampLabel(visit, stampDate);
+          if (visit) row.querySelector('small')!.textContent = visitLocationLabel(visit) + ' - ' + visitStampLabel(visit, stampDate);
         });
         if (form.dataset.editId === id) {
           form.dataset.editId = '';
@@ -555,7 +573,7 @@ export class PassportApp {
     button.disabled = true;
     try {
       const state = await this.store.snapshot();
-      const backup: PassportBackup = { format: 'aviation-passport', schemaVersion: 3, programId: this.program.id, exportedAt: new Date().toISOString(), checkIns: state.visits, orders: reconcileOrders(state.visits, state.visits, state.orders), attachments: [] };
+      const backup: PassportBackup = { format: 'aviation-passport', schemaVersion: 4, programId: this.program.id, exportedAt: new Date().toISOString(), checkIns: state.visits, orders: reconcileOrders(state.visits, state.visits, state.orders), attachments: [] };
       if (this.events.signal.aborted) return;
       const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
       const link = document.createElement('a'); link.href = url; link.download = `${this.program.id}-passport.json`;
@@ -625,7 +643,7 @@ export class PassportApp {
   }
 
   private async saveRecord(visit: CheckIn, revision: number): Promise<boolean> {
-    if (!isCalendarDate(visit.visitedAt) || visit.visitedAt > localDate()) throw new Error('Choose a valid date today or earlier.');
+    if (!isCalendarDate(visit.visitedAt) || visit.visitedAt > (visit.timeKnown && visit.timeZone ? calendarDate(Date.now(), visit.timeZone) : this.program.checkIn ? [localDate(), calendarDate(Date.now(), this.program.checkIn.timeZone)].sort().at(-1)! : localDate())) throw new Error('Choose a valid date today or earlier.');
     const original = this.visits.find(v => v.id === visit.id);
     if (original?.historyOnly) visit.historyOnly = true;
     const sameDay = this.visits.filter(v => v.id !== visit.id && v.airportId === visit.airportId && v.visitedAt === visit.visitedAt);
@@ -674,5 +692,5 @@ export class PassportApp {
     await this.store.delete(id, revision); await this.reloadPassport(); this.render(); return true;
   }
 
-  async destroy() { this.collection?.destroy(); for (const timer of this.feedbackTimers.values()) clearTimeout(timer); this.feedbackTimers.clear(); this.events.abort(); this.resize?.disconnect(); this.unsubscribeMap?.(); this.offlineUI?.destroy(); this.offline?.close(); this.map?.remove(); await this.offline?.storage.close(); await this.store.close(); this.root.replaceChildren(); this.root.classList.remove('passport-app'); }
+  async destroy() { this.locationCheckIn?.destroy(); this.collection?.destroy(); for (const timer of this.feedbackTimers.values()) clearTimeout(timer); this.feedbackTimers.clear(); this.events.abort(); this.resize?.disconnect(); this.unsubscribeMap?.(); this.offlineUI?.destroy(); this.offline?.close(); this.map?.remove(); await this.offline?.storage.close(); await this.store.close(); this.root.replaceChildren(); this.root.classList.remove('passport-app'); }
 }

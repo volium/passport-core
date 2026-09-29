@@ -1,3 +1,4 @@
+import { validVisitTiming } from './geolocation.js';
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { CheckIn, StampOrder } from './models.js';
 import { reconcileOrders, validateOrders } from './collection.js';
@@ -13,9 +14,9 @@ export class PassportStore {
   constructor(private programId: string) {
     this.database = new Promise((resolve, reject) => {
       let blocked = false;
-      void openDB<PassportDatabase>(`aviation-passport:${programId}`, 3, {
+      void openDB<PassportDatabase>(`aviation-passport:${programId}`, 4, {
         upgrade(db, oldVersion) {
-          // v3 adds visit-only semantics; the version boundary protects against older writers.
+          // v4 adds location evidence/timed visits; keep old writers from dropping these fields.
           if (oldVersion < 1) db.createObjectStore('checkIns', { keyPath: 'id' });
           if (oldVersion < 2) { db.createObjectStore('orders', { keyPath: 'date' }); db.createObjectStore('meta'); }
         },
@@ -43,6 +44,7 @@ export class PassportStore {
       const state = { visits: [...visits], orders, revision };
       apply(state);
       if (state.visits.some(v => v.programId !== this.programId)) throw new Error('Wrong program');
+      if (state.visits.some(v => !validVisitTiming(v))) throw new Error('Invalid visit time or location evidence.');
       // Reconciliation and visits share one transaction, including deletion and imports.
       const reconciled = state.orders === orders ? reconcileOrders(visits, state.visits, orders) : state.orders;
       if (!validateOrders(reconciled, state.visits)) throw new Error('Invalid collection order');

@@ -61,7 +61,7 @@ test('keyboard same-day order persists, cancels safely, and round-trips through 
   const download = page.waitForEvent('download'); await page.locator('#export').click();
   const stream = await (await download).createReadStream(); const chunks: Buffer[] = []; for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
   const backup = JSON.parse(Buffer.concat(chunks).toString());
-  expect(backup.schemaVersion).toBe(3); expect(backup.orders[0].airportIds).toEqual(['BBB', 'CCC', 'AAA']);
+  expect(backup.schemaVersion).toBe(4); expect(backup.orders[0].airportIds).toEqual(['BBB', 'CCC', 'AAA']);
   const fresh = await context.browser()!.newContext(); await fresh.addInitScript(() => localStorage.setItem('passport:independent-core:offline-introduction:browser', 'seen'));
   const other = await fresh.newPage(); await other.goto('/tests/browser/app.html?collection=1'); await other.locator('#passport-tab').click();
   await other.locator('#import').setInputFiles({ name: 'restored.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
@@ -226,7 +226,7 @@ test('saving earlier history keeps the stamp across reload and notes edits', asy
   const download = page.waitForEvent('download'); await page.locator('#export').click();
   const stream = await (await download).createReadStream(); const chunks: Buffer[] = []; for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
   const backup = JSON.parse(Buffer.concat(chunks).toString());
-  expect(backup.schemaVersion).toBe(3);
+  expect(backup.schemaVersion).toBe(4);
   expect(backup.checkIns.find((v: { notes: string }) => v.notes === 'Corrected history notes').historyOnly).toBe(true);
   expect(backup.orders[0]).toEqual({ date: '2026-09-10', airportIds: ['AAA', 'BBB', 'CCC'], confirmed: true });
   await openDetails(page, 'AAA');
